@@ -15,8 +15,8 @@ categories = ["accessibility", "simulation"]
 
 [dependencies]
 # Barter Ecosystem
-barter-data = "0.7.0"
-barter-integration = "0.5.3"
+barter-data = { version = "0.7.0", path = "../barter-data-rs" }
+barter-integration = { version = "0.5.3", path = "../barter-integration-rs" }
 
 # Logging
 tracing = "0.1.36"
@@ -40,7 +40,7 @@ redis = "0.22.2"
 ta = "0.5.0"
 
 # Misc
-uuid = {version = "1.2.2", features = ["v4", "serde"]}
-chrono = {version = "0.4.21", features = ["serde"]}
+uuid = { version = "1.2.2", features = ["v4", "serde"] }
+chrono = { version = "0.4.21", features = ["serde"] }
 prettytable-rs = "0.10.0"
 parking_lot = "0.12.1"
