@@ -1,0 +1,48 @@
+[package]
+name = "barter-data"
+version = "0.7.0"
+authors = ["JustAStream"]
+edition = "2021"
+license = "MIT"
+documentation = "https://docs.rs/barter-data/"
+repository = "https://github.com/barter-rs/barter-data-rs"
+readme = "README.md"
+description = "High performance & normalised WebSocket intergration for leading cryptocurrency exchanges - batteries included."
+keywords = ["trading", "backtesting", "crypto", "stocks", "investment"]
+categories = ["accessibility", "simulation"]
+
+[dev-dependencies]
+tracing-subscriber = { version = "0.3.16", features = ["env-filter", "json"] }
+rust_decimal = "1.29.1"
+rust_decimal_macros = "1.29.1"
+
+[dependencies]
+# Barter Ecosystem
+barter-integration = "0.5.3"
+barter-macro =  "0.1.1"
+
+# Logging
+tracing = "0.1.36"
+
+# Async
+tokio = { version = "1.20.1", features = ["sync", "macros", "rt-multi-thread"] }
+tokio-stream = { version = "0.1.9", features = ["sync"] }
+futures = "0.3.21"
+async-trait = "0.1.57"
+
+# Protocol
+url = "2.3.1"
+reqwest = "0.11.13"
+
+# Error
+thiserror = "1.0.32"
+
+# SerDe
+serde = { version = "1.0.143", features = ["derive"] }
+serde_json = "1.0.83"
+
+# Strategy
+ta = "0.5.0"
+
+# Misc
+chrono = {version = "0.4.21", features = ["serde"]}
