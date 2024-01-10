@@ -9,11 +9,12 @@ use crate::{
 use async_trait::async_trait;
 use barter_integration::{
     model::{instrument::Instrument, SubscriptionId},
-    protocol::websocket::WsMessage,
+    protocol::{flat_files::BacktestMode, websocket::WsMessage},
     Transformer,
 };
 use serde::{Deserialize, Serialize};
-use std::marker::PhantomData;
+use std::{fs::File, io::Write, marker::PhantomData, sync::Arc};
+use tokio;
 use tokio::sync::mpsc;
 
 /// Defines how to apply a [`Self::Update`] to an [`Self::OrderBook`].
@@ -24,12 +25,18 @@ where
 {
     type OrderBook;
     type Update;
+    type Snapshot;
 
-    /// Initialises the [`InstrumentOrderBook`] for the provided [`Instrument`]. This often requires
-    /// a HTTP call to receive a starting [`OrderBook`] snapshot.
-    async fn init<Exchange, Kind>(
-        ws_sink_tx: mpsc::UnboundedSender<WsMessage>,
-        instrument: Instrument,
+    /// This often am HTTP call to receive a starting [`OrderBook`] snapshot.
+    async fn get_snapshot<Exchange, Kind>(_: &Instrument) -> Result<Self::Snapshot, DataError>
+    where
+        Exchange: Send,
+        Kind: Send;
+
+    /// Initialises the [`InstrumentOrderBook`] for the provided [`Instrument`]
+    fn init<Exchange, Kind>(
+        _: Instrument,
+        _: Self::Snapshot,
     ) -> Result<InstrumentOrderBook<Self>, DataError>
     where
         Exchange: Send,
@@ -61,6 +68,15 @@ pub struct MultiBookTransformer<Exchange, Kind, Updater> {
     phantom: PhantomData<(Exchange, Kind)>,
 }
 
+impl<Exchange, Kind, Updater> MultiBookTransformer<Exchange, Kind, Updater> {
+    pub fn init_book_map(book_map: Map<InstrumentOrderBook<Updater>>) -> Result<Self, DataError> {
+        Ok(Self {
+            book_map,
+            phantom: PhantomData::default(),
+        })
+    }
+}
+
 #[async_trait]
 impl<Exchange, Kind, Updater> ExchangeTransformer<Exchange, Kind>
     for MultiBookTransformer<Exchange, Kind, Updater>
@@ -69,20 +85,40 @@ where
     Kind: SubKind<Event = OrderBook> + Send,
     Updater: OrderBookUpdater<OrderBook = Kind::Event> + Send,
     Updater::Update: Identifier<Option<SubscriptionId>> + for<'de> Deserialize<'de>,
+    Updater::Snapshot: Serialize,
 {
     async fn new(
-        ws_sink_tx: mpsc::UnboundedSender<WsMessage>,
+        _: mpsc::UnboundedSender<WsMessage>,
         map: Map<Instrument>,
+        backtest_mode: BacktestMode,
     ) -> Result<Self, DataError> {
         // Initialise InstrumentOrderBooks for all Subscriptions
         let (sub_ids, init_book_requests): (Vec<_>, Vec<_>) = map
             .0
             .into_iter()
             .map(|(sub_id, instrument)| {
-                (
-                    sub_id,
-                    Updater::init::<Exchange, Kind>(ws_sink_tx.clone(), instrument),
-                )
+                let sub_id = Arc::new(sub_id);
+                let sub_id_clone = sub_id.clone();
+                let order_book = || async move {
+                    let snapshot = Updater::get_snapshot::<Exchange, Kind>(&instrument).await?;
+
+                    if backtest_mode == BacktestMode::ToFile {
+                        let time = chrono::Local::now().format("%Y-%m-%d").to_string();
+                        let file_name = format!("data/snapshot_{}_{}.json", &sub_id_clone, time);
+                        // Serialize the map to a JSON string
+                        let serialized = serde_json::to_string(&snapshot).unwrap();
+
+                        // Create a file to write to
+                        let mut file = File::create(file_name).unwrap();
+
+                        // Write the JSON string to the file, handling any errors
+                        file.write_all(serialized.as_bytes()).unwrap();
+                    }
+
+                    Updater::init::<Exchange, Kind>(instrument, snapshot)
+                };
+
+                (sub_id, order_book())
             })
             .unzip();
 
@@ -95,6 +131,7 @@ where
         // Construct OrderBookMap if all requests successful
         let book_map = sub_ids
             .into_iter()
+            .map(|sub_id| Arc::<SubscriptionId>::try_unwrap(sub_id).unwrap())
             .zip(init_order_books.into_iter())
             .collect::<Map<InstrumentOrderBook<Updater>>>();
 

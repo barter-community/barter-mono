@@ -1,3 +1,6 @@
+# MacOS
+DS_Store
+
 # Rust
 Cargo.lock
 /target
@@ -5,3 +8,6 @@ Cargo.lock
 # IDE
 .idea/
 *.iml
+
+#data
+data

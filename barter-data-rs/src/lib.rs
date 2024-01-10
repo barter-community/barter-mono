@@ -91,7 +91,10 @@ use crate::{
 };
 use async_trait::async_trait;
 use barter_integration::{
-    protocol::websocket::{WebSocketParser, WsMessage, WsSink, WsStream},
+    protocol::{
+        flat_files::BacktestMode,
+        websocket::{WebSocketParser, WsMessage, WsSink, WsStream},
+    },
     ExchangeStream,
 };
 use futures::{SinkExt, Stream, StreamExt};
@@ -152,7 +155,10 @@ where
     Exchange: Connector,
     Kind: SubKind,
 {
-    async fn init(subscriptions: &[Subscription<Exchange, Kind>]) -> Result<Self, DataError>
+    async fn init(
+        subscriptions: &[Subscription<Exchange, Kind>],
+        backtest_mode: BacktestMode,
+    ) -> Result<Self, DataError>
     where
         Subscription<Exchange, Kind>: Identifier<Exchange::Channel> + Identifier<Exchange::Market>;
 }
@@ -165,7 +171,10 @@ where
     Transformer: ExchangeTransformer<Exchange, Kind> + Send,
     Kind::Event: Send,
 {
-    async fn init(subscriptions: &[Subscription<Exchange, Kind>]) -> Result<Self, DataError>
+    async fn init(
+        subscriptions: &[Subscription<Exchange, Kind>],
+        backtest_mode: BacktestMode,
+    ) -> Result<Self, DataError>
     where
         Subscription<Exchange, Kind>: Identifier<Exchange::Channel> + Identifier<Exchange::Market>,
     {
@@ -193,9 +202,9 @@ where
         }
 
         // Construct Transformer associated with this Exchange and SubKind
-        let transformer = Transformer::new(ws_sink_tx, map).await?;
+        let transformer = Transformer::new(ws_sink_tx, map, backtest_mode).await?;
 
-        Ok(ExchangeWsStream::new(ws_stream, transformer))
+        Ok(ExchangeWsStream::new(ws_stream, transformer, backtest_mode))
     }
 }
 

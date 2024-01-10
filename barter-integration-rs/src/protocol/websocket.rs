@@ -37,6 +37,16 @@ impl StreamParser for WebSocketParser {
     type Message = WsMessage;
     type Error = WsError;
 
+    fn get_msg_contents(input: &Result<Self::Message, Self::Error>) -> Option<&String> {
+        match input {
+            Ok(ws_message) => match ws_message {
+                WsMessage::Text(text) => Some(text),
+                _ => None,
+            },
+            _ => None,
+        }
+    }
+
     fn parse<Output>(
         input: Result<Self::Message, Self::Error>,
     ) -> Option<Result<Output, SocketError>>

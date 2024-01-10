@@ -9,11 +9,9 @@ use async_trait::async_trait;
 use barter_integration::{
     error::SocketError,
     model::{instrument::Instrument, SubscriptionId},
-    protocol::websocket::WsMessage,
 };
 use chrono::Utc;
 use serde::{Deserialize, Serialize};
-use tokio::sync::mpsc;
 
 /// [`BinanceSpot`](super::BinanceSpot) HTTP OrderBook L2 snapshot url.
 ///
@@ -155,11 +153,11 @@ impl BinanceSpotBookUpdater {
 impl OrderBookUpdater for BinanceSpotBookUpdater {
     type OrderBook = OrderBook;
     type Update = BinanceSpotOrderBookL2Delta;
+    type Snapshot = BinanceOrderBookL2Snapshot;
 
-    async fn init<Exchange, Kind>(
-        _: mpsc::UnboundedSender<WsMessage>,
-        instrument: Instrument,
-    ) -> Result<InstrumentOrderBook<Self>, DataError>
+    async fn get_snapshot<Exchange, Kind>(
+        instrument: &Instrument,
+    ) -> Result<Self::Snapshot, DataError>
     where
         Exchange: Send,
         Kind: Send,
@@ -180,6 +178,17 @@ impl OrderBookUpdater for BinanceSpotBookUpdater {
             .await
             .map_err(SocketError::Http)?;
 
+        Ok(snapshot)
+    }
+
+    fn init<Exchange, Kind>(
+        instrument: Instrument,
+        snapshot: Self::Snapshot,
+    ) -> Result<InstrumentOrderBook<Self>, DataError>
+    where
+        Exchange: Send,
+        Kind: Send,
+    {
         Ok(InstrumentOrderBook {
             instrument,
             updater: Self::new(snapshot.last_update_id),

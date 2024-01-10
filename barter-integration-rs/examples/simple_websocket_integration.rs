@@ -1,6 +1,9 @@
 use barter_integration::{
     error::SocketError,
-    protocol::websocket::{WebSocket, WebSocketParser, WsMessage},
+    protocol::{
+        flat_files::BacktestMode,
+        websocket::{WebSocket, WebSocketParser, WsMessage},
+    },
     ExchangeStream, Transformer,
 };
 use futures::{SinkExt, StreamExt};
@@ -79,7 +82,7 @@ async fn main() {
     let transformer = StatefulTransformer { sum_of_volume: 0.0 };
 
     // ExchangeWsStream includes pre-defined WebSocket Sink/Stream & WebSocket StreamParser
-    let mut ws_stream = ExchangeWsStream::new(binance_conn, transformer);
+    let mut ws_stream = ExchangeWsStream::new(binance_conn, transformer, BacktestMode::None);
 
     // Receive a stream of your desired Output data model from the ExchangeStream
     while let Some(volume_result) = ws_stream.next().await {

@@ -9,7 +9,7 @@ use crate::{
 use async_trait::async_trait;
 use barter_integration::{
     model::{instrument::Instrument, SubscriptionId},
-    protocol::websocket::WsMessage,
+    protocol::{flat_files::BacktestMode, websocket::WsMessage},
     Transformer,
 };
 use serde::{Deserialize, Serialize};
@@ -38,6 +38,7 @@ where
     async fn new(
         _: mpsc::UnboundedSender<WsMessage>,
         instrument_map: Map<Instrument>,
+        _: BacktestMode,
     ) -> Result<Self, DataError> {
         Ok(Self {
             instrument_map,

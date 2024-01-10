@@ -5,6 +5,7 @@ use crate::{
     subscription::{SubKind, Subscription},
     Identifier, MarketStream,
 };
+use barter_integration::protocol::flat_files::BacktestMode;
 use futures::StreamExt;
 use std::time::Duration;
 use tokio::sync::mpsc;
@@ -23,6 +24,7 @@ pub const STARTING_RECONNECT_BACKOFF_MS: u64 = 125;
 pub async fn consume<Exchange, Kind>(
     subscriptions: Vec<Subscription<Exchange, Kind>>,
     exchange_tx: mpsc::UnboundedSender<MarketEvent<Kind::Event>>,
+    backtest_mode: BacktestMode,
 ) -> DataError
 where
     Exchange: StreamSelector<Kind>,
@@ -50,7 +52,7 @@ where
         info!(%exchange, attempt, "attempting to initialise MarketStream");
 
         // Attempt to initialise MarketStream: if it fails on first attempt return DataError
-        let mut stream = match Exchange::Stream::init(&subscriptions).await {
+        let mut stream = match Exchange::Stream::init(&subscriptions, backtest_mode).await {
             Ok(stream) => {
                 info!(%exchange, attempt, "successfully initialised MarketStream");
                 attempt = 0;

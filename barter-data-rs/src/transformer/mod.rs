@@ -5,7 +5,9 @@ use crate::{
 };
 use async_trait::async_trait;
 use barter_integration::{
-    model::instrument::Instrument, protocol::websocket::WsMessage, Transformer,
+    model::instrument::Instrument,
+    protocol::{flat_files::BacktestMode, websocket::WsMessage},
+    Transformer,
 };
 use tokio::sync::mpsc;
 
@@ -30,5 +32,6 @@ where
     async fn new(
         ws_sink_tx: mpsc::UnboundedSender<WsMessage>,
         instrument_map: Map<Instrument>,
+        backtest_mode: BacktestMode,
     ) -> Result<Self, DataError>;
 }

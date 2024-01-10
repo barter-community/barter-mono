@@ -24,7 +24,7 @@ barter-macro = "0.1.1"
 tracing = "0.1.36"
 
 # Async
-tokio = { version = "1.20.1", features = ["sync", "macros", "rt-multi-thread"] }
+tokio = { version = "1.20.1", features = ["sync", "macros", "rt-multi-thread", "fs"] }
 tokio-stream = { version = "0.1.9", features = ["sync"] }
 futures = "0.3.21"
 async-trait = "0.1.57"
@@ -45,3 +45,4 @@ ta = "0.5.0"
 
 # Misc
 chrono = { version = "0.4.21", features = ["serde"] }
+csv-async = {version = "1.2", features = ["tokio"]}
