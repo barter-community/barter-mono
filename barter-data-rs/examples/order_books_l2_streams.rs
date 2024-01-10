@@ -1,17 +1,12 @@
 use barter_data::{
-    event::MarketEvent,
     exchange::{binance::spot::BinanceSpot, ExchangeId},
     streams::Streams,
-    subscription::book::{OrderBook, OrderBooksL2},
+    subscription::book::OrderBooksL2,
 };
 use barter_integration::{
     model::instrument::kind::InstrumentKind, protocol::flat_files::BacktestMode,
 };
-use chrono::Timelike;
-use tokio::{
-    fs::OpenOptions,
-    io::{AsyncWriteExt, BufWriter},
-};
+
 use tracing::info;
 
 static BACKTEST_MODE: BacktestMode = BacktestMode::ToFile;
@@ -26,15 +21,15 @@ async fn main() {
     // '--> each call to StreamBuilder::subscribe() creates a separate WebSocket connection
     let mut streams = Streams::<OrderBooksL2>::builder()
 
-        // Separate WebSocket connection for BTC_USDT stream since it's very high volume
-        // .subscribe([
-        //     (BinanceSpot::default(), "btc", "usdt", InstrumentKind::Spot, OrderBooksL2),
-        // ], BACKTEST_MODE)
-
         // Separate WebSocket connection for ETH_USDT stream since it's very high volume
         .subscribe([
             (BinanceSpot::default(), "eth", "usdt", InstrumentKind::Spot, OrderBooksL2),
         ], BACKTEST_MODE)
+
+        // Separate WebSocket connection for BTC_USDT stream since it's very high volume
+        // .subscribe([
+        //     (BinanceSpot::default(), "btc", "usdt", InstrumentKind::Spot, OrderBooksL2),
+        // ], BACKTEST_MODE)
 
         // Lower volume Instruments can share a WebSocket connection
         // .subscribe([
