@@ -7,6 +7,9 @@ pub mod error;
 /// Live market event feed for dry-trading & live-trading.
 pub mod live;
 
+/// Backtest market event feed for dry-trading & live-trading.
+pub mod backtest;
+
 /// Historical market event feed for backtesting.
 pub mod historical;
 
