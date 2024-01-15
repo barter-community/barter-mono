@@ -1,7 +1,7 @@
 use barter_data::{
     exchange::{binance::spot::BinanceSpot, ExchangeId},
     streams::Streams,
-    subscription::book::OrderBooksL2,
+    subscription::{book::OrderBooksL2, trade::PublicTrades},
 };
 use barter_integration::{
     model::instrument::kind::InstrumentKind, protocol::flat_files::BacktestMode,
@@ -17,12 +17,21 @@ async fn main() {
     // Initialise INFO Tracing log subscriber
     init_logging();
 
+    let mut tradeStream = Streams::<PublicTrades>::builder()
+        .subscribe_bt([
+            (BinanceSpot::default(), "eth", "usdt", InstrumentKind::Spot, PublicTrades),
+        ], BACKTEST_MODE)
+        .init()
+        .await
+        .unwrap();
+
+
     // Initialise OrderBooksL2 Streams for BinanceSpot only
     // '--> each call to StreamBuilder::subscribe() creates a separate WebSocket connection
     let mut streams = Streams::<OrderBooksL2>::builder()
 
         // Separate WebSocket connection for ETH_USDT stream since it's very high volume
-        .subscribe([
+        .subscribe_bt([
             (BinanceSpot::default(), "eth", "usdt", InstrumentKind::Spot, OrderBooksL2),
         ], BACKTEST_MODE)
 

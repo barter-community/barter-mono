@@ -18,3 +18,4 @@ Cargo.lock
 
 # data
 /data
+/plot

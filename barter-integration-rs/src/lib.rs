@@ -140,7 +140,7 @@ where
                         let formatted = rec_time.format("%Y_%m_%d_%H").to_string();
                         // + minute.to_string().as_str();
                         let file_name = format!("data/binance_l2_{}.dat", formatted);
-                        flat_files::write_to_file(&text, &file_name).unwrap();
+                        flat_files::append_to_file(&text, &file_name).unwrap();
                     }
                     _ => {}
                 };

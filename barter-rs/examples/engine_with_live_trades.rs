@@ -22,10 +22,7 @@ use barter_data::{
     streams::Streams,
     subscription::trade::PublicTrades,
 };
-use barter_integration::{
-    model::{instrument::kind::InstrumentKind, Market},
-    protocol::flat_files::BacktestMode,
-};
+use barter_integration::model::{instrument::kind::InstrumentKind, Market};
 use parking_lot::Mutex;
 use std::{collections::HashMap, sync::Arc, time::Duration};
 use tokio::sync::mpsc;
@@ -123,27 +120,21 @@ async fn stream_market_event_trades() -> mpsc::UnboundedReceiver<MarketEvent<Dat
     // '--> each call to StreamBuilder::subscribe() creates a separate WebSocket connection
     let mut streams = Streams::<PublicTrades>::builder()
         // Separate WebSocket connection for BTC_USDT stream since it's very high volume
-        .subscribe(
-            [(
-                BinanceSpot::default(),
-                "btc",
-                "usdt",
-                InstrumentKind::Spot,
-                PublicTrades,
-            )],
-            BacktestMode::None,
-        )
+        .subscribe([(
+            BinanceSpot::default(),
+            "btc",
+            "usdt",
+            InstrumentKind::Spot,
+            PublicTrades,
+        )])
         // Separate WebSocket connection for ETH_USDT stream since it's very high volume
-        .subscribe(
-            [(
-                BinanceSpot::default(),
-                "eth",
-                "usdt",
-                InstrumentKind::Spot,
-                PublicTrades,
-            )],
-            BacktestMode::None,
-        )
+        .subscribe([(
+            BinanceSpot::default(),
+            "eth",
+            "usdt",
+            InstrumentKind::Spot,
+            PublicTrades,
+        )])
         .init()
         .await
         .unwrap();

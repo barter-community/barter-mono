@@ -20,6 +20,7 @@ barter-integration = { version = "0.5.3", path = "../barter-integration-rs" }
 
 # Logging
 tracing = "0.1.36"
+tracing-subscriber = { version = "0.3.16", features = ["env-filter", "json"] }
 
 # Async
 tokio = { version = "1.20.1", features = ["sync"] }
@@ -44,3 +45,6 @@ uuid = { version = "1.2.2", features = ["v4", "serde"] }
 chrono = { version = "0.4.21", features = ["serde"] }
 prettytable-rs = "0.10.0"
 parking_lot = "0.12.1"
+ndarray = "0.15.6"
+ndarray-stats = "0.5.1"
+plotpy = "0.5.1"

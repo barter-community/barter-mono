@@ -156,7 +156,15 @@ where
                     );
                     continue 'trading;
                 }
-                Feed::Finished => break 'trading,
+                Feed::Finished => {
+                    warn!(
+                        engine_id = %self.engine_id,
+                        market = ?self.market,
+                        "MarketFeed finished"
+                    );
+                    self.strategy.on_market_feed_finished();
+                    break 'trading;
+                }
             }
 
             // Handle Events in the event_q

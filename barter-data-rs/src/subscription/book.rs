@@ -99,6 +99,20 @@ impl OrderBook {
         }
     }
 
+    pub fn best_bid(&self) -> Option<f64> {
+        match self.bids.levels.first() {
+            Some(best_bid) => Some(best_bid.price),
+            None => None,
+        }
+    }
+
+    pub fn best_ask(&self) -> Option<f64> {
+        match self.asks.levels.first() {
+            Some(best_ask) => Some(best_ask.price),
+            None => None,
+        }
+    }
+
     /// Calculate the volume weighted mid price (micro-price), weighing the best bid and ask prices
     /// with their associated amount.
     ///
