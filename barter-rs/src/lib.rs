@@ -245,6 +245,9 @@ pub mod engine;
 #[macro_use]
 extern crate prettytable;
 
+#[macro_use]
+extern crate ndarray;
+
 pub mod test_util {
     use crate::{
         data::MarketMeta,

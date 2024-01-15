@@ -14,10 +14,10 @@ use barter::{
         trading::{Config as StatisticConfig, TradingSummary},
         Initialiser,
     },
-    strategy::example::{Config as StrategyConfig, RSIStrategy},
+    strategy::mm::{Config as StrategyConfig, GLFTStrategy},
 };
 use barter_data::{
-    event::{DataKind, MarketEvent},
+    event::{DataKind, MarketEvent, MarketIter},
     exchange::{
         binance::{
             book::l2::BinanceOrderBookL2Snapshot,
@@ -25,6 +25,7 @@ use barter_data::{
                 l2::{BinanceSpotBookUpdater, BinanceSpotOrderBookL2Delta},
                 BinanceSpot,
             },
+            trade::BinanceTrade,
         },
         Connector,
     },
@@ -54,13 +55,14 @@ use futures::stream::{self, StreamExt};
 
 use uuid::Uuid;
 
-const ORDER_BOOK_DELTAS: &str = "data/binance_l2_2024_01_10_19.dat";
-const SNAPSHOT: &str = "data/snapshot_@depth@100ms|ETHUSDT_2024-01-10.json";
+const ORDER_BOOK_DELTAS: &str = "data/binance_l2_2024_01_14.dat";
+const SNAPSHOT: &str = "data/snapshot_@depth@100ms|ETHUSDT_2024-01-13.json";
 
 #[tokio::main]
 async fn main() {
-    let (tx, mut rx) = mpsc::unbounded_channel();
-    init_data_stream(tx).await.unwrap();
+    init_logging();
+    let (tx, rx) = mpsc::unbounded_channel();
+    tokio::spawn(async { init_data_stream(tx).await.unwrap() });
 
     // Create channel to distribute Commands to the Engine & it's Traders (eg/ Command::Terminate)
     let (_command_tx, command_rx) = mpsc::channel(20);
@@ -108,11 +110,9 @@ async fn main() {
             .command_rx(trader_command_rx)
             .event_tx(event_tx.clone())
             .portfolio(Arc::clone(&portfolio))
+            //  thi is actually a feed from file
             .data(live::MarketFeed::new(rx))
-            // .data(historical::MarketFeed::new(
-            // load_json_market_event_candles().into_iter(),
-            // ))
-            .strategy(RSIStrategy::new(StrategyConfig { rsi_period: 14 }))
+            .strategy(GLFTStrategy::new(StrategyConfig {}))
             .execution(SimulatedExecution::new(ExecutionConfig {
                 simulated_fees_pct: Fees {
                     exchange: 0.1,
@@ -145,6 +145,10 @@ async fn main() {
     // Run Engine trading & listen to Events it produces
     tokio::spawn(listen_to_engine_events(event_rx));
     engine.run().await;
+
+    // tx.closed().await;
+    // init_data_stream(tx).await.unwrap();
+    // tokio::spawn(async { init_data_stream(tx).await.unwrap() });
 }
 
 async fn init_data_stream(tx: mpsc::UnboundedSender<MarketEvent<DataKind>>) -> Result<(), Error> {
@@ -165,19 +169,47 @@ async fn init_data_stream(tx: mpsc::UnboundedSender<MarketEvent<DataKind>>) -> R
     while let Some(line) = lines.next().await {
         let msg = WsMessage::Text(line.unwrap());
 
-        let exchange_message: BinanceSpotOrderBookL2Delta = match WebSocketParser::parse(Ok(msg)) {
-            Some(Ok(exchange_message)) => exchange_message,
-            Some(Err(err)) => panic!("{:?}", err),
-            None => panic!("failed to parse2"),
-        };
+        // TODO: optimise this
+        let msg_clone = msg.clone();
 
-        transformer
-            .transform(exchange_message)
+        let trade_msg: Option<BinanceTrade> =
+            match WebSocketParser::parse::<BinanceTrade>(Ok(msg_clone)) {
+                Some(Ok(exchange_message)) => Some(exchange_message),
+                Some(Err(_)) => None,
+                None => panic!("failed to parse2"),
+            };
+
+        if let Some(trade_msg) = trade_msg {
+            // no need for transformer here
+            MarketIter::from((
+                BinanceSpot::ID,
+                Instrument::from(("eth", "usdt", InstrumentKind::Spot)),
+                trade_msg,
+            ))
+            .0
             .into_iter()
             .for_each(|event| match event {
                 Ok(event) => tx.send(MarketEvent::from(event)).unwrap(),
                 _ => {}
             });
+            continue;
+        }
+
+        let order_book_msg = match WebSocketParser::parse::<BinanceSpotOrderBookL2Delta>(Ok(msg)) {
+            Some(Ok(exchange_message)) => Some(exchange_message),
+            Some(Err(err)) => None,
+            None => panic!("failed to parse2"),
+        };
+
+        if let Some(order_book_msg) = order_book_msg {
+            transformer
+                .transform(order_book_msg)
+                .into_iter()
+                .for_each(|event| match event {
+                    Ok(event) => tx.send(MarketEvent::from(event)).unwrap(),
+                    _ => {}
+                });
+        }
     }
 
     Ok(())
@@ -187,7 +219,8 @@ async fn line_stream(
     file_path: &str,
 ) -> io::Result<impl stream::Stream<Item = io::Result<String>>> {
     let file = File::open(file_path).await?;
-    let reader = BufReader::new(file);
+    // let reader = BufReader::new(file);
+    let reader = BufReader::with_capacity(12500000, file); // Set buffer size to 1024 bytes
 
     let stream = stream::unfold(reader, |mut reader| async {
         let mut line = String::new();
@@ -289,4 +322,21 @@ async fn listen_to_engine_events(mut event_rx: mpsc::UnboundedReceiver<Event>) {
             }
         }
     }
+}
+
+// Initialise an INFO `Subscriber` for `Tracing` Json logs and install it as the global default.
+fn init_logging() {
+    tracing_subscriber::fmt()
+        // Filter messages based on the INFO
+        // .with_env_filter(
+        //     tracing_subscriber::filter::EnvFilter::builder()
+        //         .with_default_directive(tracing_subscriber::filter::LevelFilter::INFO.into())
+        //         .from_env_lossy(),
+        // )
+        // Disable colours on release builds
+        .with_ansi(cfg!(debug_assertions))
+        // Enable Json formatting
+        .json()
+        // Install this Tracing subscriber as global default
+        .init()
 }

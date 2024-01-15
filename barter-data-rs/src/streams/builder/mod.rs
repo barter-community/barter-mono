@@ -54,12 +54,24 @@ where
         }
     }
 
+    pub fn subscribe<SubIter, Sub, Exchange>(self, subscriptions: SubIter) -> Self
+    where
+        SubIter: IntoIterator<Item = Sub>,
+        Sub: Into<Subscription<Exchange, Kind>>,
+        Exchange: StreamSelector<Kind> + Ord + Send + Sync + 'static,
+        Kind: Ord + Send + Sync + 'static,
+        Kind::Event: Send,
+        Subscription<Exchange, Kind>: Identifier<Exchange::Channel> + Identifier<Exchange::Market>,
+    {
+        self.subscribe_bt(subscriptions, BacktestMode::None)
+    }
+
     /// Add a collection of [`Subscription`]s to the [`StreamBuilder`] that will be actioned on
     /// a distinct [`WebSocket`](barter_integration::protocol::websocket::WebSocket) connection.
     ///
     /// Note that [`Subscription`]s are not actioned until the
     /// [`init()`](StreamBuilder::init()) method is invoked.
-    pub fn subscribe<SubIter, Sub, Exchange>(
+    pub fn subscribe_bt<SubIter, Sub, Exchange>(
         mut self,
         subscriptions: SubIter,
         backtest_mode: BacktestMode,
