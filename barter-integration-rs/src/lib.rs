@@ -18,9 +18,14 @@
     rust_2018_idioms
 )]
 
-use crate::{error::SocketError, protocol::StreamParser};
+use crate::{
+    error::SocketError,
+    protocol::{flat_files, flat_files::BacktestMode, websocket::WsMessage, StreamParser},
+};
+use chrono::Timelike;
 use futures::Stream;
 use pin_project::pin_project;
+use protocol::websocket::{WebSocketParser, WsError};
 use serde::Deserialize;
 use std::{
     collections::VecDeque,
@@ -29,6 +34,7 @@ use std::{
     pin::Pin,
     task::{Context, Poll},
 };
+// use tokio_tungstenite::tungstenite::Message;
 
 /// Foundational data structures that define the building blocks used by the rest of the `Barter`
 /// ecosystem.
@@ -83,6 +89,7 @@ where
     pub transformer: StreamTransformer,
     pub buffer: VecDeque<Result<StreamTransformer::Output, StreamTransformer::Error>>,
     pub protocol_marker: PhantomData<Protocol>,
+    pub backtest_mode: BacktestMode,
 }
 
 impl<Protocol, InnerStream, StreamTransformer> Stream
@@ -109,6 +116,9 @@ where
                 Poll::Pending => return Poll::Pending,
             };
 
+            // TODO: is it optimal to clone the string here?
+            let raw_msg = Protocol::get_msg_contents(&input).map(|s| s.clone());
+
             // Parse input protocol message into `ExchangeMessage`
             let exchange_message = match Protocol::parse::<StreamTransformer::Input>(input) {
                 // `StreamParser` successfully deserialised `ExchangeMessage`
@@ -120,6 +130,21 @@ where
                 // If `StreamParser` returns None it's a safe-to-skip message
                 None => continue,
             };
+
+            if self.backtest_mode == BacktestMode::ToFile {
+                match raw_msg {
+                    Some(text) => {
+                        let rec_time = chrono::Utc::now();
+                        // let minute = (rec_time.minute() as f32 / 5.0).floor() as i32 * 5;
+                        // TODO how to get ex/pair/id?
+                        let formatted = rec_time.format("%Y_%m_%d_%H").to_string();
+                        // + minute.to_string().as_str();
+                        let file_name = format!("data/binance_l2_{}.dat", formatted);
+                        flat_files::append_to_file(&text, &file_name).unwrap();
+                    }
+                    _ => {}
+                };
+            }
 
             // Transform `ExchangeMessage` into `Transformer::OutputIter`
             // ie/ IntoIterator<Item = Result<Output, SocketError>>
@@ -142,12 +167,17 @@ where
     InnerStream: Stream,
     StreamTransformer: Transformer,
 {
-    pub fn new(stream: InnerStream, transformer: StreamTransformer) -> Self {
+    pub fn new(
+        stream: InnerStream,
+        transformer: StreamTransformer,
+        backtest_mode: BacktestMode,
+    ) -> Self {
         Self {
             stream,
             transformer,
             buffer: VecDeque::with_capacity(6),
             protocol_marker: PhantomData::default(),
+            backtest_mode,
         }
     }
 }

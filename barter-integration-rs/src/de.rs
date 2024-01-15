@@ -1,3 +1,5 @@
+use serde_json::Value;
+
 /// Determine the `DateTime<Utc>` from the provided `Duration` since the epoch.
 pub fn datetime_utc_from_epoch_duration(
     duration: std::time::Duration,
@@ -12,8 +14,16 @@ where
     T: std::str::FromStr,
     T::Err: std::fmt::Display,
 {
-    let data: &str = serde::de::Deserialize::deserialize(deserializer)?;
-    data.parse::<T>().map_err(serde::de::Error::custom)
+    let data = serde::de::Deserialize::deserialize(deserializer)?;
+
+    match data {
+        Value::Number(number) => {
+            let as_string = number.to_string();
+            T::from_str(&as_string).map_err(serde::de::Error::custom)
+        }
+        Value::String(string) => string.parse::<T>().map_err(serde::de::Error::custom),
+        _ => Err(serde::de::Error::custom("Expected a string or a number")),
+    }
 }
 
 /// Deserialize a `u64` milliseconds value as `DateTime<Utc>`.

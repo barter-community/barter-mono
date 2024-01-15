@@ -5,3 +5,6 @@ Cargo.lock
 # IDE
 .idea/
 *.iml
+
+#data
+data

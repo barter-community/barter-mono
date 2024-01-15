@@ -8,10 +8,15 @@ use std::collections::HashMap;
 /// Barter example RSI strategy [`SignalGenerator`] implementation.
 pub mod example;
 
+pub mod mm;
+
+pub mod glft;
+
 /// May generate an advisory [`Signal`] as a result of analysing an input [`MarketEvent`].
 pub trait SignalGenerator {
     /// Optionally return a [`Signal`] given input [`MarketEvent`].
     fn generate_signal(&mut self, market: &MarketEvent<DataKind>) -> Option<Signal>;
+    fn on_market_feed_finished(&mut self) {}
 }
 
 /// Advisory [`Signal`] for a [`Market`] detailing the [`SignalStrength`] associated with each

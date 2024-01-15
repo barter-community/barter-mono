@@ -1,4 +1,6 @@
 [workspace]
+resolver = "2"
+
 members = [
     "barter-data-rs",
     "barter-integration-rs",

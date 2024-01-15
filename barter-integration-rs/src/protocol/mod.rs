@@ -5,6 +5,7 @@ use serde::de::DeserializeOwned;
 /// Contains useful `WebSocket` type aliases and a default `WebSocket` implementation of a
 /// [`StreamParser`].
 pub mod websocket;
+use std::fmt::Debug;
 
 /// Contains HTTP client capable of executing signed & unsigned requests, as well as an associated
 /// exchange oriented HTTP request.
@@ -14,8 +15,12 @@ pub mod http;
 /// (eg/ WebSocket, Financial Information eXchange (FIX), etc.) and deserialising into an `Output`.
 pub trait StreamParser {
     type Stream: Stream;
-    type Message;
+    type Message: Debug + Clone;
     type Error;
+
+    fn get_msg_contents(_: &Result<Self::Message, Self::Error>) -> Option<&String> {
+        None
+    }
 
     fn parse<Output>(
         input: Result<Self::Message, Self::Error>,
@@ -23,3 +28,5 @@ pub trait StreamParser {
     where
         Output: DeserializeOwned;
 }
+
+pub mod flat_files;
