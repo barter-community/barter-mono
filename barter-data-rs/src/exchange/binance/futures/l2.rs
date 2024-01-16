@@ -1,7 +1,7 @@
 use super::super::book::{l2::BinanceOrderBookL2Snapshot, BinanceLevel};
 use crate::{
     error::DataError,
-    subscription::book::OrderBook,
+    subscription::book::{InnerOrderBook, OrderBook},
     transformer::book::{InstrumentOrderBook, OrderBookUpdater},
     Identifier,
 };
@@ -196,7 +196,9 @@ impl OrderBookUpdater for BinanceFuturesBookUpdater {
         Ok(InstrumentOrderBook {
             instrument,
             updater: Self::new(snapshot.last_update_id),
-            book: OrderBook::from(snapshot),
+            book: OrderBook {
+                book: Box::new(InnerOrderBook::from(snapshot)),
+            },
         })
     }
 
@@ -225,9 +227,9 @@ impl OrderBookUpdater for BinanceFuturesBookUpdater {
         // Update OrderBook metadata & Levels:
         // 7. The data in each event is the absolute quantity for a price level.
         // 8. If the quantity is 0, remove the price level.
-        book.last_update_time = Utc::now();
-        book.bids.upsert(update.bids);
-        book.asks.upsert(update.asks);
+        book.book.last_update_time = Utc::now();
+        book.book.bids.upsert(update.bids);
+        book.book.asks.upsert(update.asks);
 
         // Update OrderBookUpdater metadata
         self.updates_processed += 1;

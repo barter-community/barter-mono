@@ -2,7 +2,7 @@ use crate::{
     error::DataError,
     event::{MarketEvent, MarketIter},
     exchange::Connector,
-    subscription::{book::OrderBook, Map, SubKind},
+    subscription::{book::InnerOrderBook, book::OrderBook, Map, SubKind},
     transformer::ExchangeTransformer,
     Identifier,
 };
@@ -188,8 +188,10 @@ where
             updater,
         } = book;
 
+        let mut book = book.clone();
+
         // Apply update (snapshot or delta) to OrderBook & generate Market<OrderBook> snapshot
-        match updater.update(book, update) {
+        match updater.update(&mut book, update) {
             Ok(Some(book)) => {
                 MarketIter::<OrderBook>::from((Exchange::ID, instrument.clone(), book)).0
             }

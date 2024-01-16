@@ -72,18 +72,23 @@ impl SubKind for OrderBooksL3 {
 
 /// Normalised Barter [`OrderBook`] snapshot.
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Debug, Deserialize, Serialize)]
-pub struct OrderBook {
+pub struct InnerOrderBook {
     pub last_update_time: DateTime<Utc>,
     pub bids: OrderBookSide,
     pub asks: OrderBookSide,
+}
+
+#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Debug, Deserialize, Serialize)]
+pub struct OrderBook {
+    pub book: Box<InnerOrderBook>,
 }
 
 impl OrderBook {
     /// Generate an [`OrderBook`] snapshot by cloning [`Self`] after sorting each [`OrderBookSide`].
     pub fn snapshot(&mut self) -> Self {
         // Sort OrderBook & Clone
-        self.bids.sort();
-        self.asks.sort();
+        self.book.bids.sort();
+        self.book.asks.sort();
         self.clone()
     }
 
@@ -91,7 +96,7 @@ impl OrderBook {
     ///
     /// See Docs: <https://www.quantstart.com/articles/high-frequency-trading-ii-limit-order-book>
     pub fn mid_price(&self) -> Option<f64> {
-        match (self.bids.levels.first(), self.asks.levels.first()) {
+        match (self.book.bids.levels.first(), self.book.asks.levels.first()) {
             (Some(best_bid), Some(best_ask)) => Some(mid_price(best_bid.price, best_ask.price)),
             (Some(best_bid), None) => Some(best_bid.price),
             (None, Some(best_ask)) => Some(best_ask.price),
@@ -100,14 +105,14 @@ impl OrderBook {
     }
 
     pub fn best_bid(&self) -> Option<f64> {
-        match self.bids.levels.first() {
+        match self.book.bids.levels.first() {
             Some(best_bid) => Some(best_bid.price),
             None => None,
         }
     }
 
     pub fn best_ask(&self) -> Option<f64> {
-        match self.asks.levels.first() {
+        match self.book.asks.levels.first() {
             Some(best_ask) => Some(best_ask.price),
             None => None,
         }
@@ -118,7 +123,7 @@ impl OrderBook {
     ///
     /// See Docs: <https://www.quantstart.com/articles/high-frequency-trading-ii-limit-order-book>
     pub fn volume_weighed_mid_price(&self) -> Option<f64> {
-        match (self.bids.levels.first(), self.asks.levels.first()) {
+        match (self.book.bids.levels.first(), self.book.asks.levels.first()) {
             (Some(best_bid), Some(best_ask)) => {
                 Some(volume_weighted_mid_price(*best_bid, *best_ask))
             }
@@ -290,7 +295,7 @@ pub fn volume_weighted_mid_price(best_bid: Level, best_ask: Level) -> f64 {
 impl From<(ExchangeId, Instrument, OrderBook)> for MarketIter<OrderBook> {
     fn from((exchange_id, instrument, book): (ExchangeId, Instrument, OrderBook)) -> Self {
         Self(vec![Ok(MarketEvent {
-            exchange_time: book.last_update_time,
+            exchange_time: book.book.last_update_time,
             received_time: Utc::now(),
             exchange: Exchange::from(exchange_id),
             instrument,

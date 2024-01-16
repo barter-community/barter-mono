@@ -30,7 +30,7 @@ use barter_data::{
         Connector,
     },
     subscription::book::{OrderBook, OrderBooksL2},
-    subscription::Map,
+    subscription::{book::InnerOrderBook, Map},
     transformer::book::{InstrumentOrderBook, MultiBookTransformer, OrderBookUpdater},
 };
 use barter_integration::{
@@ -155,7 +155,9 @@ async fn init_data_stream(tx: mpsc::UnboundedSender<MarketEvent<DataKind>>) -> R
     let snapshot: BinanceOrderBookL2Snapshot = load_snapshot::<BinanceSpotBookUpdater>(SNAPSHOT);
     let updater = BinanceSpotBookUpdater::new(snapshot.last_update_id);
 
-    let book = OrderBook::from(snapshot);
+    let book = OrderBook {
+        book: Box::new(InnerOrderBook::from(snapshot)),
+    };
 
     let instrument = Instrument::from(("eth", "usdt", InstrumentKind::Spot));
 
