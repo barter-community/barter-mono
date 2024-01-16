@@ -13,7 +13,8 @@ use barter_integration::{
     Transformer,
 };
 use serde::{Deserialize, Serialize};
-use std::{fs::File, io::Write, marker::PhantomData, sync::Arc};
+use std::{collections::HashMap, fs::File, io::Write, marker::PhantomData, sync::Arc};
+
 use tokio;
 use tokio::sync::mpsc;
 
@@ -83,15 +84,25 @@ impl<Exchange, Kind, Updater> ExchangeTransformer<Exchange, Kind>
 where
     Exchange: Connector + Send,
     Kind: SubKind<Event = OrderBook> + Send,
-    Updater: OrderBookUpdater<OrderBook = Kind::Event> + Send,
+    Updater: OrderBookUpdater<OrderBook = Kind::Event> + Send + Clone,
     Updater::Update: Identifier<Option<SubscriptionId>> + for<'de> Deserialize<'de>,
     Updater::Snapshot: Serialize,
 {
-    async fn new(
-        _: mpsc::UnboundedSender<WsMessage>,
+    async fn new(_map: Map<Instrument>, _backtest_mode: BacktestMode) -> Result<Self, DataError> {
+        // Construct empty OrderBookMap
+        let mut book_map = HashMap::new();
+
+        Ok(Self {
+            book_map: Map(book_map),
+            phantom: PhantomData::default(),
+        })
+    }
+
+    async fn init_connection(
+        &mut self,
         map: Map<Instrument>,
         backtest_mode: BacktestMode,
-    ) -> Result<Self, DataError> {
+    ) -> Result<&Self, DataError> {
         // Initialise InstrumentOrderBooks for all Subscriptions
         let (sub_ids, init_book_requests): (Vec<_>, Vec<_>) = map
             .0
@@ -135,10 +146,13 @@ where
             .zip(init_order_books.into_iter())
             .collect::<Map<InstrumentOrderBook<Updater>>>();
 
-        Ok(Self {
-            book_map,
-            phantom: PhantomData::default(),
-        })
+        self.book_map = book_map;
+
+        Ok(self)
+        // Ok(Self {
+        //     book_map,
+        //     phantom: PhantomData::default(),
+        // })
     }
 }
 

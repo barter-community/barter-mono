@@ -66,18 +66,6 @@ where
         self.subscribe_bt(subscriptions, BacktestMode::None)
     }
 
-    // pub fn subscribe<SubIter, Sub, Exchange>(self, subscriptions: SubIter) -> Self
-    // where
-    //     SubIter: IntoIterator<Item = Sub>,
-    //     Sub: Into<Subscription<Exchange, Kind>>,
-    //     Exchange: StreamSelector<Kind> + Ord + Send + Sync + 'static,
-    //     Kind: Ord + Send + Sync + 'static,
-    //     Kind::Event: Send,
-    //     Subscription<Exchange, Kind>: Identifier<Exchange::Channel> + Identifier<Exchange::Market>,
-    // {
-    //     self.subscribe_bt(subscriptions, BacktestMode::None)
-    // }
-
     /// Add a collection of [`Subscription`]s to the [`StreamBuilder`] that will be actioned on
     /// a distinct [`WebSocket`](barter_integration::protocol::websocket::WebSocket) connection.
     ///
@@ -119,18 +107,6 @@ where
         }));
 
         self
-    }
-
-    pub fn add_fut(mut self, f: SubscribeFuture) -> Self {
-        self.futures.push(f);
-        self
-    }
-
-    pub fn get_ex_tx(
-        &mut self,
-        ex_id: ExchangeId,
-    ) -> mpsc::UnboundedSender<MarketEvent<Kind::Event>> {
-        self.channels.entry(ex_id).or_default().tx.clone()
     }
 
     /// Spawn a [`MarketEvent<SubKind::Event>`](MarketEvent) consumer loop for each collection of
