@@ -1,3 +1,5 @@
+use std::sync::{Arc, Mutex};
+
 use super::super::book::{l2::BinanceOrderBookL2Snapshot, BinanceLevel};
 use crate::{
     error::DataError,
@@ -193,7 +195,7 @@ impl OrderBookUpdater for BinanceSpotBookUpdater {
             instrument,
             updater: Self::new(snapshot.last_update_id),
             book: OrderBook {
-                book: Box::new(InnerOrderBook::from(snapshot)),
+                book: Arc::new(Mutex::new(InnerOrderBook::from(snapshot))),
             },
         })
     }
@@ -223,16 +225,21 @@ impl OrderBookUpdater for BinanceSpotBookUpdater {
         // Update OrderBook metadata & Levels:
         // 7. The data in each event is the absolute quantity for a price level.
         // 8. If the quantity is 0, remove the price level.
-        book.book.last_update_time = Utc::now();
-        book.book.bids.upsert(update.bids);
-        book.book.asks.upsert(update.asks);
+
+        // let mut lock = book.book.lock().unwrap();
+        // lock.last_update_time = Utc::now();
+        // lock.bids.upsert(update.bids);
+        // lock.asks.upsert(update.asks);
+        // drop(lock);
 
         // Update OrderBookUpdater metadata
         self.updates_processed += 1;
         self.prev_last_update_id = self.last_update_id;
         self.last_update_id = update.last_update_id;
 
-        Ok(Some(book.snapshot()))
+        Ok(Some(book.clone()))
+
+        // Ok(Some(book.snapshot()))
     }
 }
 

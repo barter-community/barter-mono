@@ -6,8 +6,11 @@ use crate::{
 use barter_integration::model::{instrument::Instrument, Exchange, Side};
 use barter_macro::{DeSubKind, SerSubKind};
 use chrono::{DateTime, Utc};
-use serde::{Deserialize, Serialize};
-use std::cmp::Ordering;
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use std::{
+    cmp::Ordering,
+    sync::{Arc, Mutex},
+};
 use tracing::debug;
 
 /// Barter [`Subscription`](super::Subscription) [`SubKind`] that yields level 1 [`OrderBook`]
@@ -78,17 +81,49 @@ pub struct InnerOrderBook {
     pub asks: OrderBookSide,
 }
 
-#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug)]
 pub struct OrderBook {
-    pub book: Box<InnerOrderBook>,
+    pub book: Arc<Mutex<InnerOrderBook>>,
+}
+
+impl Serialize for OrderBook {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        // Lock the mutex and serialize the inner data
+        self.book.lock().unwrap().serialize(serializer)
+    }
+}
+
+impl<'de> Deserialize<'de> for OrderBook {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        // Deserialize the data and put it in a Mutex
+        let book = InnerOrderBook::deserialize(deserializer)?;
+        Ok(OrderBook {
+            book: Arc::new(Mutex::new(book)),
+        })
+    }
+}
+
+impl PartialEq for OrderBook {
+    fn eq(&self, other: &Self) -> bool {
+        let book = self.book.lock().unwrap();
+        let other_book = other.book.lock().unwrap();
+        book.eq(&*other_book)
+    }
 }
 
 impl OrderBook {
     /// Generate an [`OrderBook`] snapshot by cloning [`Self`] after sorting each [`OrderBookSide`].
     pub fn snapshot(&mut self) -> Self {
         // Sort OrderBook & Clone
-        self.book.bids.sort();
-        self.book.asks.sort();
+        let mut book = self.book.lock().unwrap();
+        book.bids.sort();
+        book.asks.sort();
         self.clone()
     }
 
@@ -96,7 +131,8 @@ impl OrderBook {
     ///
     /// See Docs: <https://www.quantstart.com/articles/high-frequency-trading-ii-limit-order-book>
     pub fn mid_price(&self) -> Option<f64> {
-        match (self.book.bids.levels.first(), self.book.asks.levels.first()) {
+        let book = self.book.lock().unwrap();
+        match (book.bids.levels.first(), book.asks.levels.first()) {
             (Some(best_bid), Some(best_ask)) => Some(mid_price(best_bid.price, best_ask.price)),
             (Some(best_bid), None) => Some(best_bid.price),
             (None, Some(best_ask)) => Some(best_ask.price),
@@ -105,14 +141,16 @@ impl OrderBook {
     }
 
     pub fn best_bid(&self) -> Option<f64> {
-        match self.book.bids.levels.first() {
+        let book = self.book.lock().unwrap();
+        match book.bids.levels.first() {
             Some(best_bid) => Some(best_bid.price),
             None => None,
         }
     }
 
     pub fn best_ask(&self) -> Option<f64> {
-        match self.book.asks.levels.first() {
+        let book = self.book.lock().unwrap();
+        match book.asks.levels.first() {
             Some(best_ask) => Some(best_ask.price),
             None => None,
         }
@@ -123,7 +161,8 @@ impl OrderBook {
     ///
     /// See Docs: <https://www.quantstart.com/articles/high-frequency-trading-ii-limit-order-book>
     pub fn volume_weighed_mid_price(&self) -> Option<f64> {
-        match (self.book.bids.levels.first(), self.book.asks.levels.first()) {
+        let book = self.book.lock().unwrap();
+        match (book.bids.levels.first(), book.asks.levels.first()) {
             (Some(best_bid), Some(best_ask)) => {
                 Some(volume_weighted_mid_price(*best_bid, *best_ask))
             }
@@ -198,7 +237,24 @@ impl OrderBookSide {
             }
 
             // Scenario 2a: Level does not exist & new value > 0 => insert new Level
-            None if new_level.amount > 0.0 => self.levels.push(new_level),
+            None if new_level.amount > 0.0 => {
+                if self.side == Side::Buy {
+                    let index = self
+                        .levels
+                        .iter()
+                        .position(|level| level.price < new_level.price)
+                        .unwrap_or(self.levels.len());
+                    self.levels.insert(index, new_level);
+                } else {
+                    let index = self
+                        .levels
+                        .iter()
+                        .position(|level| level.price > new_level.price)
+                        .unwrap_or(self.levels.len());
+                    self.levels.insert(index, new_level);
+                }
+                // self.levels.push(new_level),
+            }
 
             // Scenario 2b: Level does not exist & new value is 0 => log error & continue
             _ => {
@@ -294,8 +350,11 @@ pub fn volume_weighted_mid_price(best_bid: Level, best_ask: Level) -> f64 {
 
 impl From<(ExchangeId, Instrument, OrderBook)> for MarketIter<OrderBook> {
     fn from((exchange_id, instrument, book): (ExchangeId, Instrument, OrderBook)) -> Self {
+        let lock = book.book.lock().unwrap();
+        let exchange_time = lock.last_update_time;
+        drop(lock);
         Self(vec![Ok(MarketEvent {
-            exchange_time: book.book.last_update_time,
+            exchange_time,
             received_time: Utc::now(),
             exchange: Exchange::from(exchange_id),
             instrument,

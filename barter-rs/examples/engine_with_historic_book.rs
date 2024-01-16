@@ -46,7 +46,12 @@ use barter_integration::{
 };
 use parking_lot::Mutex;
 use serde::Deserialize;
-use std::{collections::HashMap, fs, io::Error, sync::Arc};
+use std::{
+    collections::HashMap,
+    fs,
+    io::Error,
+    sync::{Arc, Mutex as stdMutex},
+};
 use tokio::fs::File;
 use tokio::io::{self, AsyncBufReadExt, BufReader};
 use tokio::sync::mpsc;
@@ -156,7 +161,7 @@ async fn init_data_stream(tx: mpsc::UnboundedSender<MarketEvent<DataKind>>) -> R
     let updater = BinanceSpotBookUpdater::new(snapshot.last_update_id);
 
     let book = OrderBook {
-        book: Box::new(InnerOrderBook::from(snapshot)),
+        book: Arc::new(stdMutex::new(InnerOrderBook::from(snapshot))),
     };
 
     let instrument = Instrument::from(("eth", "usdt", InstrumentKind::Spot));

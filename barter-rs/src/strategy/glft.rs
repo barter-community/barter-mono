@@ -6,13 +6,13 @@ use ndarray::prelude::*;
 use ndarray_stats::{QuantileExt, SummaryStatisticsExt};
 use plotpy::{Curve, Plot, StrError};
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Copy)]
 pub struct MeasurementParams {
     pub best_bid_tick: f64,
     pub best_ask_tick: f64,
     pub tick_size: f64,
     pub mid_price_tick: f64,
-    index: usize,
+    pub index: usize,
 }
 
 impl Default for MeasurementParams {
@@ -85,9 +85,10 @@ pub fn measure_trading_intensity(
 pub fn get_params(
     arrival_depth: ArrayView<'_, f64, Ix1>,
     mid_price_chg: ArrayView<'_, f64, Ix1>,
+    index: usize,
 ) -> Result<(f64, f64, f64), StrError> {
     let tmp = Array::from_elem(500, 0);
-    let a_depth = arrival_depth.slice(s![..6000]);
+    let a_depth = arrival_depth.slice(s![index + 1 - 6000..index]);
     let mut lambda_ = measure_trading_intensity(a_depth, tmp).map(|e| *e as f64);
     lambda_ /= 600.0;
     // trim data down to get better fit
@@ -117,12 +118,17 @@ pub fn get_params(
     // plot.save("./plot/doc_curve_methods.svg").unwrap();
 
     // Volatility
-    let firstNan = mid_price_chg.iter().position(|&x| x.is_nan()).unwrap();
-    let mid_price_chg = mid_price_chg.slice_move(s![firstNan + 1..]);
-    let secondNan = mid_price_chg.iter().position(|&x| x.is_nan()).unwrap();
-    let mid_price_chg = mid_price_chg.slice_move(s![..secondNan]);
+    // let firstNan = mid_price_chg.iter().position(|&x| x.is_nan()).unwrap();
+    // let mid_price_chg = mid_price_chg.slice_move(s![firstNan + 1..]);
+    // let secondNan = mid_price_chg.iter().position(|&x| x.is_nan()).unwrap();
+    // let mid_price_chg = mid_price_chg.slice_move(s![..secondNan]);
 
+    let mid_price_chg = mid_price_chg.slice(s![index + 1 - 6000..index]);
     let weights = Array::from_elem(mid_price_chg.len(), 1_f64);
+
+    // mid_price_chg
+    //     .iter()
+    //     .for_each(|p| println!("mid price: {:?}", p));
 
     // Since we need volatility in ticks per square root of a second and our measurement is every 100ms,
     // multiply by the square root of 10.
