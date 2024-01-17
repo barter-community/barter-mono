@@ -35,8 +35,8 @@ where
 
     async fn init_connection(
         &mut self,
-        instrument_map: Map<Instrument>,
-        backtest_mode: BacktestMode,
+        _instrument_map: Map<Instrument>,
+        _backtest_mode: BacktestMode,
     ) -> Result<&Self, DataError> {
         Ok(self)
     }

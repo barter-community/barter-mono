@@ -245,6 +245,7 @@ pub mod engine;
 #[macro_use]
 extern crate prettytable;
 
+#[allow(unused_imports)]
 #[macro_use]
 extern crate ndarray;
 

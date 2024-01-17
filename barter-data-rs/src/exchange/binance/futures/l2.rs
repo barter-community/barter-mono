@@ -1,5 +1,3 @@
-use std::sync::{Arc, Mutex};
-
 use super::super::book::{l2::BinanceOrderBookL2Snapshot, BinanceLevel};
 use crate::{
     error::DataError,
@@ -198,9 +196,7 @@ impl OrderBookUpdater for BinanceFuturesBookUpdater {
         Ok(InstrumentOrderBook {
             instrument,
             updater: Self::new(snapshot.last_update_id),
-            book: OrderBook {
-                book: Arc::new(Mutex::new(InnerOrderBook::from(snapshot))),
-            },
+            book: OrderBook::from(InnerOrderBook::from(snapshot)),
         })
     }
 
@@ -226,7 +222,7 @@ impl OrderBookUpdater for BinanceFuturesBookUpdater {
             self.validate_next_update(&update)?;
         }
 
-        let mut lock = book.book.lock().unwrap();
+        let mut lock = book.book.lock();
 
         // Update OrderBook metadata & Levels:
         // 7. The data in each event is the absolute quantity for a price level.
@@ -504,7 +500,7 @@ mod tests {
         fn update() {
             struct TestCase {
                 updater: BinanceFuturesBookUpdater,
-                book: OrderBook,
+                book: InnerOrderBook,
                 input_update: BinanceFuturesOrderBookL2Delta,
                 expected: Result<Option<OrderBook>, DataError>,
             }
@@ -518,7 +514,7 @@ mod tests {
                         updates_processed: 100,
                         last_update_id: 100,
                     },
-                    book: OrderBook {
+                    book: InnerOrderBook {
                         last_update_time: time,
                         bids: OrderBookSide::new(Side::Buy, vec![Level::new(50, 1)]),
                         asks: OrderBookSide::new(Side::Sell, vec![Level::new(100, 1)]),
@@ -539,7 +535,7 @@ mod tests {
                         updates_processed: 100,
                         last_update_id: 100,
                     },
-                    book: OrderBook {
+                    book: InnerOrderBook {
                         last_update_time: time,
                         bids: OrderBookSide::new(
                             Side::Buy,
@@ -580,7 +576,7 @@ mod tests {
                             },
                         ],
                     },
-                    expected: Ok(Some(OrderBook {
+                    expected: Ok(Some(OrderBook::from(InnerOrderBook {
                         last_update_time: time,
                         bids: OrderBookSide::new(
                             Side::Buy,
@@ -595,20 +591,23 @@ mod tests {
                                 Level::new(200, 1),
                             ],
                         ),
-                    })),
+                    }))),
                 },
             ];
 
             for (index, mut test) in tests.into_iter().enumerate() {
-                let actual = test.updater.update(&mut test.book, test.input_update);
+                let mut book = OrderBook::from(test.book);
+
+                let actual = test.updater.update(&mut book, test.input_update);
 
                 match (actual, test.expected) {
                     (Ok(Some(actual)), Ok(Some(expected))) => {
                         // Replace time with deterministic timestamp
-                        let actual = OrderBook {
-                            last_update_time: time,
-                            ..actual
-                        };
+                        let mut lock = actual.book.lock();
+
+                        lock.last_update_time = time;
+                        drop(lock);
+
                         assert_eq!(actual, expected, "TC{} failed", index)
                     }
                     (Ok(None), Ok(None)) => {

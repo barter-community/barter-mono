@@ -1,18 +1,14 @@
 use super::glft::*;
-use super::{Decision, Signal, SignalGenerator, SignalStrength};
-use crate::data::MarketMeta;
+use super::{Signal, SignalGenerator};
 use barter_data::{
-    event::{self, DataKind, MarketEvent},
-    exchange::binance::market,
+    event::{DataKind, MarketEvent},
     subscription::trade::PublicTrade,
 };
 use chrono::{DateTime, Timelike, Utc};
 use ndarray::prelude::*;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
-use ta::{indicators::RelativeStrengthIndex, Next};
 
-use tracing::{error, info};
+use tracing::error;
 
 const INTERVAL: i64 = 100; // ms interval for measurments
 const GAMMA: f64 = 0.05;
@@ -49,20 +45,20 @@ impl SignalGenerator for GLFTStrategy {
         };
 
         // Check if it's a MarketEvent with a candle
-        // let _book = match &market.kind {
-        //     DataKind::OrderBook(book) => {
-        //         let m = &mut self.measurement_params;
-        //         match (book.best_bid(), book.best_ask()) {
-        //             (Some(best_bid), Some(best_ask)) => {
-        //                 m.best_bid_tick = best_bid / m.tick_size;
-        //                 m.best_ask_tick = best_ask / m.tick_size;
-        //             }
-        //             _ => (),
-        //         }
-        //         Some(book)
-        //     }
-        //     _ => return None,
-        // };
+        let _book = match &market.kind {
+            DataKind::OrderBook(book) => {
+                let m = &mut self.measurement_params;
+                match (book.best_bid(), book.best_ask()) {
+                    (Some(best_bid), Some(best_ask)) => {
+                        m.best_bid_tick = best_bid / m.tick_size;
+                        m.best_ask_tick = best_ask / m.tick_size;
+                    }
+                    _ => (),
+                }
+                Some(book)
+            }
+            _ => return None,
+        };
 
         return None;
 
@@ -116,31 +112,34 @@ impl GLFTStrategy {
         let elapsed = event_time - self.last_exchange_time.unwrap();
         self.last_trades.push(trade.clone());
 
+        // TODO we actually want to run this at fixed 100ms intervals
         if elapsed.num_milliseconds() >= INTERVAL {
             // this updates measurement_params
-            // measure_trading_intensity_and_volatility(
-            //     &mut self.last_trades,
-            //     &mut self.measurement_params,
-            //     self.arrival_depth.view_mut(),
-            //     self.mid_price_chg.view_mut(),
-            // );
-            // self.last_exchange_time = Some(event_time);
-            // self.last_trades.clear();
+            measure_trading_intensity_and_volatility(
+                &mut self.last_trades,
+                &mut self.measurement_params,
+                self.arrival_depth.view_mut(),
+                self.mid_price_chg.view_mut(),
+            );
+            self.last_exchange_time = Some(event_time);
+            self.last_trades.clear();
+
+            // just in case we run out of space in the arrays
+
+            let index = self.measurement_params.index;
+            if index == self.arrival_depth.len() - 1 {
+                reset_array(&mut self.mid_price_chg, index);
+                reset_array(&mut self.arrival_depth, index);
+                self.measurement_params.index = 6000;
+            }
 
             // --------------------------------------------------------
             // Calibrates A, k and calculates the market volatility.
 
-            // Updates A, k, and the volatility every 5-sec.
             let elapsed = event_time - self.last_update;
 
-            if elapsed.num_seconds() > 10 * 60 {
-                println!("date: {}", event_time);
-                self.last_update = event_time;
-            }
-
-            // window is 10 min
-            // TODO - current window is less
-            if elapsed.num_seconds() > 10 * 60 && self.measurement_params.index > 6000 {
+            // Updates A, k, and the volatility every 5-sec. (initiali window is 10 min)
+            if elapsed.num_seconds() > 5 && self.measurement_params.index > 6000 {
                 self.update_strategy_params();
                 self.last_update = event_time;
             }
@@ -170,15 +169,15 @@ impl GLFTStrategy {
         let half_spread = 1.0 * self.c1 + 1.0 / 2.0 * self.c2 * self.volatility;
         let skew = self.c2 * self.volatility;
 
-        // if (self.last_update.minute() % 10) == 0 && self.last_update.second() < 5 {
-        println!("~~~~~~");
-        println!("date: {}", self.last_update);
-        println!("c1: {}", self.c1);
-        println!("c2: {}", self.c2);
-        println!("volatility: {}", self.volatility);
-        println!("half_spread: {}", half_spread);
-        println!("skew: {}", skew);
-        // }
+        if (self.last_update.minute() % 10) == 0 && self.last_update.second() < 5 {
+            println!("~~~~~~");
+            println!("date: {}", self.last_update);
+            println!("c1: {}", self.c1);
+            println!("c2: {}", self.c2);
+            println!("volatility: {}", self.volatility);
+            println!("half_spread: {}", half_spread);
+            println!("skew: {}", skew);
+        }
     }
 
     // /// Given the latest RSI value for a symbol, generates a map containing the [`SignalStrength`] for

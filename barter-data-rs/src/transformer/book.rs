@@ -2,21 +2,18 @@ use crate::{
     error::DataError,
     event::{MarketEvent, MarketIter},
     exchange::Connector,
-    subscription::{book::InnerOrderBook, book::OrderBook, Map, SubKind},
+    subscription::{book::OrderBook, Map, SubKind},
     transformer::ExchangeTransformer,
     Identifier,
 };
 use async_trait::async_trait;
 use barter_integration::{
     model::{instrument::Instrument, SubscriptionId},
-    protocol::{flat_files::BacktestMode, websocket::WsMessage},
+    protocol::flat_files::BacktestMode,
     Transformer,
 };
 use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, fs::File, io::Write, marker::PhantomData, sync::Arc};
-
-use tokio;
-use tokio::sync::mpsc;
 
 /// Defines how to apply a [`Self::Update`] to an [`Self::OrderBook`].
 #[async_trait]
@@ -71,6 +68,13 @@ pub struct MultiBookTransformer<Exchange, Kind, Updater> {
 
 impl<Exchange, Kind, Updater> MultiBookTransformer<Exchange, Kind, Updater> {
     pub fn init_book_map(book_map: Map<InstrumentOrderBook<Updater>>) -> Result<Self, DataError> {
+        // make sure to sort the orderbooks
+        for (_, inst_book) in book_map.0.iter() {
+            let mut lock = inst_book.book.book.lock();
+            lock.asks.sort();
+            lock.bids.sort();
+        }
+
         Ok(Self {
             book_map,
             phantom: PhantomData::default(),
@@ -90,7 +94,7 @@ where
 {
     async fn new(_map: Map<Instrument>, _backtest_mode: BacktestMode) -> Result<Self, DataError> {
         // Construct empty OrderBookMap
-        let mut book_map = HashMap::new();
+        let book_map = HashMap::new();
 
         Ok(Self {
             book_map: Map(book_map),
@@ -145,6 +149,13 @@ where
             .map(|sub_id| Arc::<SubscriptionId>::try_unwrap(sub_id).unwrap())
             .zip(init_order_books.into_iter())
             .collect::<Map<InstrumentOrderBook<Updater>>>();
+
+        // make sure to sort the orderbooks
+        for (_, inst_book) in book_map.0.iter() {
+            let mut lock = inst_book.book.book.lock();
+            lock.asks.sort();
+            lock.bids.sort();
+        }
 
         self.book_map = book_map;
 

@@ -3,7 +3,6 @@ use crate::{
     event::MarketEvent,
     exchange::StreamSelector,
     subscription::{SubKind, Subscription},
-    transformer::ExchangeTransformer,
     Identifier, MarketStream,
 };
 use barter_integration::protocol::flat_files::BacktestMode;

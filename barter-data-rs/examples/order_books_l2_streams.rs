@@ -7,7 +7,7 @@ use barter_integration::{
     model::instrument::kind::InstrumentKind, protocol::flat_files::BacktestMode,
 };
 
-use tracing::info;
+// use tracing::info;
 
 static BACKTEST_MODE: BacktestMode = BacktestMode::ToFile;
 
@@ -17,7 +17,7 @@ async fn main() {
     // Initialise INFO Tracing log subscriber
     init_logging();
 
-    let mut tradeStream = Streams::<PublicTrades>::builder()
+    Streams::<PublicTrades>::builder()
         .subscribe_bt([
             (BinanceSpot::default(), "eth", "usdt", InstrumentKind::Spot, PublicTrades),
         ], BACKTEST_MODE)
@@ -62,7 +62,7 @@ async fn main() {
 
 
     // Spawn a new asynchronous task to handle writing to the file
-    while let Some(order_book_l2) = binance_stream.recv().await {
+    while let Some(_order_book_l2) = binance_stream.recv().await {
         // info!("{order_book_l2:?}");
     }  
 }

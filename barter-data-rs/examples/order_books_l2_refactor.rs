@@ -1,37 +1,19 @@
-use std::collections::HashMap;
-
 use barter_data::{
     exchange::{
         binance::{
             spot::{l2::BinanceSpotBookUpdater, BinanceServerSpot, BinanceSpot},
             Binance,
         },
-        Connector, ExchangeId, StreamSelector,
+        Connector, ExchangeId,
     },
-    streams::{builder::validate, consumer::consume, consumer::consume_new, Streams},
-    subscriber::{
-        mapper::{SubscriptionMapper, WebSocketSubMapper},
-        Subscriber, WebSocketSubscriber,
-    },
-    subscription::{
-        book::{OrderBook, OrderBooksL2},
-        trade::PublicTrades,
-        Map, SubKind, Subscription, SubscriptionMeta,
-    },
-    transformer::{
-        book::{InstrumentOrderBook, MultiBookTransformer},
-        ExchangeTransformer,
-    },
+    streams::{builder::validate, consumer::consume_new, Streams},
+    subscriber::{mapper::SubscriptionMapper, Subscriber},
+    subscription::{book::OrderBooksL2, Subscription, SubscriptionMeta},
+    transformer::{book::MultiBookTransformer, ExchangeTransformer},
 };
 use barter_integration::{
-    model::{
-        instrument::{kind::InstrumentKind, Instrument},
-        Exchange, SubscriptionId,
-    },
-    protocol::flat_files::BacktestMode,
-    Transformer,
+    model::instrument::kind::InstrumentKind, protocol::flat_files::BacktestMode,
 };
-use tokio::io::{self, AsyncBufReadExt, BufReader};
 
 use tracing::info;
 

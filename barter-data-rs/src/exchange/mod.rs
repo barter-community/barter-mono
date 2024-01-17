@@ -2,14 +2,13 @@ use self::subscription::ExchangeSub;
 use crate::{
     subscriber::{validator::SubscriptionValidator, Subscriber},
     subscription::{Map, SubKind},
-    transformer::ExchangeTransformer,
     MarketStream,
 };
 use barter_integration::{
     error::SocketError,
     model::instrument::{kind::InstrumentKind, Instrument},
     protocol::websocket::WsMessage,
-    Transformer, Validator,
+    Validator,
 };
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use std::{

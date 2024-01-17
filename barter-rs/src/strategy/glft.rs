@@ -2,9 +2,10 @@ use std::*;
 
 use barter_data::subscription::trade::PublicTrade;
 use barter_integration::model::Side;
+use core::fmt::Error;
 use ndarray::prelude::*;
 use ndarray_stats::{QuantileExt, SummaryStatisticsExt};
-use plotpy::{Curve, Plot, StrError};
+// use plotpy::{Curve, Plot, StrError};
 
 #[derive(Clone, Debug, Copy)]
 pub struct MeasurementParams {
@@ -63,7 +64,7 @@ pub fn measure_trading_intensity_and_volatility<'a>(
 }
 
 pub fn measure_trading_intensity(
-    arrival_depth: ArrayView<f64, Ix1>,
+    arrival_depth: ArrayView<'_, f64, Ix1>,
     mut out: Array<usize, Ix1>,
 ) -> Array<usize, Ix1> {
     let mut max_tick = 0;
@@ -86,7 +87,7 @@ pub fn get_params(
     arrival_depth: ArrayView<'_, f64, Ix1>,
     mid_price_chg: ArrayView<'_, f64, Ix1>,
     index: usize,
-) -> Result<(f64, f64, f64), StrError> {
+) -> Result<(f64, f64, f64), Error> {
     let tmp = Array::from_elem(500, 0);
     let a_depth = arrival_depth.slice(s![index + 1 - 6000..index]);
     let mut lambda_ = measure_trading_intensity(a_depth, tmp).map(|e| *e as f64);
@@ -161,4 +162,13 @@ pub fn compute_coeff(xi: f64, gamma: f64, delta: f64, A: f64, k: f64) -> (f64, f
             * (1.0 + ((xi * delta) * inv_k)).powf(k / (xi * delta) + 1.0),
     );
     return (c1, c2);
+}
+
+pub fn reset_array(arr: &mut Array<f64, Ix1>, index: usize) {
+    let mut new_arr = Array::from_elem(arr.len(), f64::NAN);
+    let sliced_arr = arr.slice_mut(s![index - 6000..]);
+    new_arr
+        .slice_mut(s![..sliced_arr.len()])
+        .assign(&sliced_arr);
+    *arr = new_arr.to_owned();
 }
