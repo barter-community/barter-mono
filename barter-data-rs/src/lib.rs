@@ -214,8 +214,9 @@ where
         }
 
         // Construct Transformer associated with this Exchange and SubKind
-        let mut transformer = Transformer::new(map, backtest_mode).await?;
+        let mut transformer = Transformer::new(map.clone(), backtest_mode).await?;
         transformer.add_sender(ws_sink_tx).await?;
+        transformer.init_connection(map, backtest_mode).await?;
 
         Ok(ExchangeWsStream::new(ws_stream, transformer, backtest_mode))
     }
