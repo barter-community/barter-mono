@@ -233,8 +233,6 @@ impl OrderBookUpdater for BinanceSpotBookUpdater {
         self.prev_last_update_id = self.last_update_id;
         self.last_update_id = update.last_update_id;
 
-        // Ok(Some(book.clone()))
-
         Ok(Some(book.snapshot()))
     }
 }
