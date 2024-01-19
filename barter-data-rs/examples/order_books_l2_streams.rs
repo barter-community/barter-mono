@@ -12,7 +12,7 @@ use tracing::info;
 
 // use tracing::info;
 
-static BACKTEST_MODE: BacktestMode = BacktestMode::ToFile;
+static BACKTEST_MODE: BacktestMode = BacktestMode::None;
 
 #[tokio::main]
 async fn main() {
