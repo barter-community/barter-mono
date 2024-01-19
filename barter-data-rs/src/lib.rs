@@ -164,7 +164,7 @@ where
     where
         Subscription<Exchange, Kind>: Identifier<Exchange::Channel> + Identifier<Exchange::Market>;
 
-    async fn init_with_t(
+    async fn init_with_transformer(
         subscriptions: &[Subscription<Exchange, Kind>],
         transformer: Self::Transformer,
         backtest_mode: BacktestMode,
@@ -221,7 +221,7 @@ where
         Ok(ExchangeWsStream::new(ws_stream, transformer, backtest_mode))
     }
 
-    async fn init_with_t(
+    async fn init_with_transformer(
         subscriptions: &[Subscription<Exchange, Kind>],
         mut transformer: Transformer,
         backtest_mode: BacktestMode,

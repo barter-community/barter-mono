@@ -56,27 +56,30 @@ where
         info!(%exchange, attempt, "attempting to initialise MarketStream");
 
         // Attempt to initialise MarketStream: if it fails on first attempt return DataError
-        let mut stream =
-            match Exchange::Stream::init_with_t(&subscriptions, transformer.clone(), backtest_mode)
-                .await
-            {
-                Ok(stream) => {
-                    info!(%exchange, attempt, "successfully initialised MarketStream");
-                    attempt = 0;
-                    backoff_ms = STARTING_RECONNECT_BACKOFF_MS;
-                    stream
-                }
-                Err(error) => {
-                    error!(%exchange, attempt, ?error, "failed to initialise MarketStream");
+        let mut stream = match Exchange::Stream::init_with_transformer(
+            &subscriptions,
+            transformer.clone(),
+            backtest_mode,
+        )
+        .await
+        {
+            Ok(stream) => {
+                info!(%exchange, attempt, "successfully initialised MarketStream");
+                attempt = 0;
+                backoff_ms = STARTING_RECONNECT_BACKOFF_MS;
+                stream
+            }
+            Err(error) => {
+                error!(%exchange, attempt, ?error, "failed to initialise MarketStream");
 
-                    // Exit function function if Stream::init failed the first attempt, else retry
-                    if attempt == 1 {
-                        return error;
-                    } else {
-                        continue;
-                    }
+                // Exit function function if Stream::init failed the first attempt, else retry
+                if attempt == 1 {
+                    return error;
+                } else {
+                    continue;
                 }
-            };
+            }
+        };
 
         // Consume Result<MarketEvent<T>, DataError> from MarketStream
         while let Some(event_result) = stream.next().await {

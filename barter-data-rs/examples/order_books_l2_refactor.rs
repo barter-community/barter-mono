@@ -19,7 +19,6 @@ use tracing::info;
 
 static BACKTEST_MODE: BacktestMode = BacktestMode::None;
 
-#[rustfmt::skip]
 #[tokio::main]
 async fn main() {
     // Initialise INFO Tracing log subscriber
@@ -27,10 +26,16 @@ async fn main() {
 
     // Hand-init
 
-    let subs = Subscription::from((BinanceSpot::default(), "eth", "usdt", InstrumentKind::Spot, OrderBooksL2));
-    let  subs = [subs];
+    let subs = Subscription::from((
+        BinanceSpot::default(),
+        "eth",
+        "usdt",
+        InstrumentKind::Spot,
+        OrderBooksL2,
+    ));
+    let subs = [subs];
     let mut subscriptions = subs.into_iter().collect::<Vec<_>>();
-    
+
     // Validate Subscriptions
     validate(&subscriptions).unwrap();
 
@@ -46,29 +51,35 @@ async fn main() {
         let SubscriptionMeta {
             instrument_map,
             subscriptions: _subs,
-        } = <<Binance<BinanceServerSpot> as Connector>::Subscriber as Subscriber>::SubMapper::map(&subscriptions);
-        
-        let transformer: MultiBookTransformer<BinanceSpot, OrderBooksL2, BinanceSpotBookUpdater> = MultiBookTransformer::new(instrument_map, BACKTEST_MODE).await.unwrap();
-        tokio::spawn(consume_new::<BinanceSpot, OrderBooksL2>(subscriptions, exchange_tx, transformer, BACKTEST_MODE));
+        } = <<Binance<BinanceServerSpot> as Connector>::Subscriber as Subscriber>::SubMapper::map(
+            &subscriptions,
+        );
+
+        let transformer: MultiBookTransformer<BinanceSpot, OrderBooksL2, BinanceSpotBookUpdater> =
+            MultiBookTransformer::new(instrument_map, BACKTEST_MODE)
+                .await
+                .unwrap();
+        tokio::spawn(consume_new::<BinanceSpot, OrderBooksL2>(
+            subscriptions,
+            exchange_tx,
+            transformer,
+            BACKTEST_MODE,
+        ));
         Ok(())
     });
-    
-    let mut streams = stream_builder.add_fut(fut).init().await.unwrap();
 
+    let mut streams = stream_builder.add_fut(fut).init().await.unwrap();
 
     // Select the ExchangeId::BinanceSpot stream
     // Notes:
     //  - Use `streams.select(ExchangeId)` to interact with the individual exchange streams!
     //  - Use `streams.join()` to join all exchange streams into a single mpsc::UnboundedReceiver!
-    let mut binance_stream = streams
-        .select(ExchangeId::BinanceSpot)
-        .unwrap();
-
+    let mut binance_stream = streams.select(ExchangeId::BinanceSpot).unwrap();
 
     // Spawn a new asynchronous task to handle writing to the file
     while let Some(order_book_l2) = binance_stream.recv().await {
         info!("{order_book_l2:?}");
-    }  
+    }
 }
 
 // fn build_transformer<Exchange, Kind, Updater>(

@@ -8,7 +8,7 @@ use chrono::{DateTime, Timelike, Utc};
 use ndarray::prelude::*;
 use serde::{Deserialize, Serialize};
 
-use tracing::error;
+use tracing::{error, warn};
 
 const INTERVAL: i64 = 100; // ms interval for measurments
 const GAMMA: f64 = 0.05;
@@ -83,7 +83,11 @@ impl SignalGenerator for GLFTStrategy {
     }
 
     fn on_market_feed_finished(&mut self) {
-        self.update_strategy_params();
+        if self.measurement_params.index > 6000 {
+            self.update_strategy_params();
+        } else {
+            warn!("Not enough data to calibarate model")
+        }
     }
 }
 
