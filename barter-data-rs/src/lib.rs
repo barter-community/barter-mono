@@ -98,7 +98,7 @@ use barter_integration::{
     ExchangeStream,
 };
 use futures::{SinkExt, Stream, StreamExt};
-use tokio::sync::mpsc;
+use tokio::sync::mpsc::{self};
 use tracing::{debug, error};
 
 /// All [`Error`](std::error::Error)s generated in Barter-Data.
@@ -155,8 +155,11 @@ where
     Exchange: Connector,
     Kind: SubKind,
 {
+    type Transformer: ExchangeTransformer<Exchange, Kind> + Clone + Send + Sync;
+
     async fn init(
         subscriptions: &[Subscription<Exchange, Kind>],
+        transformer: Self::Transformer,
         backtest_mode: BacktestMode,
     ) -> Result<Self, DataError>
     where
@@ -168,11 +171,14 @@ impl<Exchange, Kind, Transformer> MarketStream<Exchange, Kind> for ExchangeWsStr
 where
     Exchange: Connector + Send + Sync,
     Kind: SubKind + Send + Sync,
-    Transformer: ExchangeTransformer<Exchange, Kind> + Send,
+    Transformer: ExchangeTransformer<Exchange, Kind> + Send + Sync,
     Kind::Event: Send,
 {
+    type Transformer = Transformer;
+
     async fn init(
         subscriptions: &[Subscription<Exchange, Kind>],
+        mut transformer: Transformer,
         backtest_mode: BacktestMode,
     ) -> Result<Self, DataError>
     where
@@ -202,7 +208,8 @@ where
         }
 
         // Construct Transformer associated with this Exchange and SubKind
-        let transformer = Transformer::new(ws_sink_tx, map, backtest_mode).await?;
+        transformer.add_sender(ws_sink_tx).await?;
+        transformer.init_connection(map, backtest_mode).await?;
 
         Ok(ExchangeWsStream::new(ws_stream, transformer, backtest_mode))
     }

@@ -1,7 +1,7 @@
 use super::{super::channel::BinanceChannel, BinanceLevel};
 use crate::{
     exchange::subscription::ExchangeSub,
-    subscription::book::{OrderBook, OrderBookSide},
+    subscription::book::{InnerOrderBook, OrderBookSide},
     Identifier,
 };
 use barter_integration::model::{Side, SubscriptionId};
@@ -51,7 +51,7 @@ pub struct BinanceOrderBookL2Snapshot {
     pub asks: Vec<BinanceLevel>,
 }
 
-impl From<BinanceOrderBookL2Snapshot> for OrderBook {
+impl From<BinanceOrderBookL2Snapshot> for InnerOrderBook {
     fn from(snapshot: BinanceOrderBookL2Snapshot) -> Self {
         Self {
             last_update_time: Utc::now(),

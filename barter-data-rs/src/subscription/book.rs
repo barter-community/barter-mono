@@ -6,8 +6,9 @@ use crate::{
 use barter_integration::model::{instrument::Instrument, Exchange, Side};
 use barter_macro::{DeSubKind, SerSubKind};
 use chrono::{DateTime, Utc};
-use serde::{Deserialize, Serialize};
-use std::cmp::Ordering;
+use parking_lot::Mutex;
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use std::{cmp::Ordering, sync::Arc};
 use tracing::debug;
 
 /// Barter [`Subscription`](super::Subscription) [`SubKind`] that yields level 1 [`OrderBook`]
@@ -72,18 +73,58 @@ impl SubKind for OrderBooksL3 {
 
 /// Normalised Barter [`OrderBook`] snapshot.
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Debug, Deserialize, Serialize)]
-pub struct OrderBook {
+pub struct InnerOrderBook {
     pub last_update_time: DateTime<Utc>,
     pub bids: OrderBookSide,
     pub asks: OrderBookSide,
 }
 
+#[derive(Clone, Debug)]
+pub struct OrderBook {
+    pub book: Arc<Mutex<InnerOrderBook>>,
+}
+
+impl Serialize for OrderBook {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        // Lock the mutex and serialize the inner data
+        self.book.lock().serialize(serializer)
+    }
+}
+
+impl<'de> Deserialize<'de> for OrderBook {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        // Deserialize the data and put it in a Mutex
+        let book = InnerOrderBook::deserialize(deserializer)?;
+        Ok(OrderBook::from(book))
+    }
+}
+
+impl PartialEq for OrderBook {
+    fn eq(&self, other: &Self) -> bool {
+        let book = self.book.lock();
+        let other_book = other.book.lock();
+        book.eq(&*other_book)
+    }
+}
+
 impl OrderBook {
     /// Generate an [`OrderBook`] snapshot by cloning [`Self`] after sorting each [`OrderBookSide`].
+    /// Note: Sorting is not required here because of the way insertion into the orderbook works
+    /// however, this only works if we sart off with a sorted orderbook to begin with
+    /// we can optionally sort here as well if speed is not an issue.
     pub fn snapshot(&mut self) -> Self {
         // Sort OrderBook & Clone
-        self.bids.sort();
-        self.asks.sort();
+        // let mut book = self.book.lock();
+        // let prev_book = book.clone();
+        // book.bids.sort();
+        // book.asks.sort();
+        // assert!(book.eq(&prev_book), "OrderBook sort failed");
         self.clone()
     }
 
@@ -91,7 +132,8 @@ impl OrderBook {
     ///
     /// See Docs: <https://www.quantstart.com/articles/high-frequency-trading-ii-limit-order-book>
     pub fn mid_price(&self) -> Option<f64> {
-        match (self.bids.levels.first(), self.asks.levels.first()) {
+        let book = self.book.lock();
+        match (book.bids.levels.first(), book.asks.levels.first()) {
             (Some(best_bid), Some(best_ask)) => Some(mid_price(best_bid.price, best_ask.price)),
             (Some(best_bid), None) => Some(best_bid.price),
             (None, Some(best_ask)) => Some(best_ask.price),
@@ -100,14 +142,16 @@ impl OrderBook {
     }
 
     pub fn best_bid(&self) -> Option<f64> {
-        match self.bids.levels.first() {
+        let book = self.book.lock();
+        match book.bids.levels.first() {
             Some(best_bid) => Some(best_bid.price),
             None => None,
         }
     }
 
     pub fn best_ask(&self) -> Option<f64> {
-        match self.asks.levels.first() {
+        let book = self.book.lock();
+        match book.asks.levels.first() {
             Some(best_ask) => Some(best_ask.price),
             None => None,
         }
@@ -118,7 +162,8 @@ impl OrderBook {
     ///
     /// See Docs: <https://www.quantstart.com/articles/high-frequency-trading-ii-limit-order-book>
     pub fn volume_weighed_mid_price(&self) -> Option<f64> {
-        match (self.bids.levels.first(), self.asks.levels.first()) {
+        let book = self.book.lock();
+        match (book.bids.levels.first(), book.asks.levels.first()) {
             (Some(best_bid), Some(best_ask)) => {
                 Some(volume_weighted_mid_price(*best_bid, *best_ask))
             }
@@ -175,35 +220,89 @@ impl OrderBookSide {
         L: Into<Level>,
     {
         let new_level = new_level.into();
+        let len = self.levels.len();
 
-        match self
-            .levels
-            .iter_mut()
-            .enumerate()
-            .find(|(_index, level)| level.eq_price(new_level.price))
-        {
+        let mut placehodler = Level::new(0, 0);
+        let index: usize;
+        let level: &mut Level;
+        if self.side == Side::Buy {
+            (index, level) = self
+                .levels
+                .iter_mut()
+                .enumerate()
+                .find(|(_index, level)| {
+                    level.price < new_level.price || level.eq_price(new_level.price)
+                })
+                .unwrap_or((len, &mut placehodler));
+        } else {
+            (index, level) = self
+                .levels
+                .iter_mut()
+                .enumerate()
+                .find(|(_index, level)| {
+                    level.price > new_level.price || level.eq_price(new_level.price)
+                })
+                .unwrap_or((len, &mut placehodler));
+        }
+
+        match (level.eq_price(new_level.price), new_level.amount == 0.0) {
             // Scenario 1a: Level exists & new value is 0 => remove Level
-            Some((index, _)) if new_level.amount == 0.0 => {
+            (true, true) => {
                 self.levels.remove(index);
             }
-
             // Scenario 1b: Level exists & new value is > 0 => replace Level
-            Some((_, level)) => {
+            (true, false) => {
                 *level = new_level;
             }
-
-            // Scenario 2a: Level does not exist & new value > 0 => insert new Level
-            None if new_level.amount > 0.0 => self.levels.push(new_level),
-
-            // Scenario 2b: Level does not exist & new value is 0 => log error & continue
-            _ => {
+            (false, false) => {
+                self.levels.insert(index, new_level);
+            }
+            (false, true) => {
                 debug!(
                     ?new_level,
                     side = %self.side,
                     "Level to remove not found",
                 );
             }
-        };
+        }
+
+        // if level.eq_price(new_level.price) && new_level.amount == 0.0 {
+        //     self.levels.remove(index);
+        // }
+        // // Scenario 1b: Level exists & new value is > 0 => replace Level
+        // else if level.eq_price(new_level.price) {
+        //     *level = new_level;
+        // }
+        // // Scenario 2a: Level does not exist & new value > 0 => insert new Level
+        // else if new_level.amount != 0.0 {
+        //     self.levels.insert(index, new_level);
+        // } else {
+        //     debug!(
+        //         ?new_level,
+        //         side = %self.side,
+        //         "Level to remove not found",
+        //     );
+        // }
+
+        // None => {
+        //     // println!("sdie: {:?}, res: {:#?}", self.side, res);
+
+        //     println!("level: {:?} levels: {:?}", new_level, self.levels,);
+        //     debug!(
+        //         ?new_level,
+        //         side = %self.side,
+        //         "Level not found",
+        //     );
+        // }
+
+        // // Scenario 2b: Level does not exist & new value is 0 => log error & continue
+        // _ => {
+        //     debug!(
+        //         ?new_level,
+        //         side = %self.side,
+        //         "Level to remove not found",
+        //     );
+        // }
     }
 
     /// Sort this [`OrderBookSide`] (bids are reversed).
@@ -289,13 +388,26 @@ pub fn volume_weighted_mid_price(best_bid: Level, best_ask: Level) -> f64 {
 
 impl From<(ExchangeId, Instrument, OrderBook)> for MarketIter<OrderBook> {
     fn from((exchange_id, instrument, book): (ExchangeId, Instrument, OrderBook)) -> Self {
+        let lock = book.book.lock();
+        let exchange_time = lock.last_update_time;
+        drop(lock);
         Self(vec![Ok(MarketEvent {
-            exchange_time: book.last_update_time,
+            exchange_time,
             received_time: Utc::now(),
             exchange: Exchange::from(exchange_id),
             instrument,
             kind: book,
         })])
+    }
+}
+
+impl From<InnerOrderBook> for OrderBook {
+    fn from(mut book: InnerOrderBook) -> Self {
+        book.asks.sort();
+        book.bids.sort();
+        Self {
+            book: Arc::new(Mutex::new(book)),
+        }
     }
 }
 
@@ -408,7 +520,7 @@ mod tests {
             let tests = vec![
                 TestCase {
                     // TC0: no levels so 0.0 mid-price
-                    input: OrderBook {
+                    input: OrderBook::from(InnerOrderBook {
                         last_update_time: Default::default(),
                         bids: OrderBookSide {
                             side: Side::Buy,
@@ -418,12 +530,12 @@ mod tests {
                             side: Side::Sell,
                             levels: vec![],
                         },
-                    },
+                    }),
                     expected: None,
                 },
                 TestCase {
                     // TC1: no asks in the book so take best bid price
-                    input: OrderBook {
+                    input: OrderBook::from(InnerOrderBook {
                         last_update_time: Default::default(),
                         bids: OrderBookSide {
                             side: Side::Buy,
@@ -433,12 +545,12 @@ mod tests {
                             side: Side::Sell,
                             levels: vec![],
                         },
-                    },
+                    }),
                     expected: Some(100.0),
                 },
                 TestCase {
                     // TC2: no bids in the book so take ask price
-                    input: OrderBook {
+                    input: OrderBook::from(InnerOrderBook {
                         last_update_time: Default::default(),
                         bids: OrderBookSide {
                             side: Side::Buy,
@@ -448,12 +560,12 @@ mod tests {
                             side: Side::Sell,
                             levels: vec![Level::new(50.0, 100.0), Level::new(100.0, 100.0)],
                         },
-                    },
+                    }),
                     expected: Some(50.0),
                 },
                 TestCase {
                     // TC3: best bid and ask amount is the same, so regular mid-price
-                    input: OrderBook {
+                    input: OrderBook::from(InnerOrderBook {
                         last_update_time: Default::default(),
                         bids: OrderBookSide {
                             side: Side::Buy,
@@ -463,7 +575,7 @@ mod tests {
                             side: Side::Sell,
                             levels: vec![Level::new(200.0, 100.0), Level::new(300.0, 100.0)],
                         },
-                    },
+                    }),
                     expected: Some(150.0),
                 },
             ];
@@ -483,7 +595,7 @@ mod tests {
             let tests = vec![
                 TestCase {
                     // TC0: no levels so 0.0 mid-price
-                    input: OrderBook {
+                    input: OrderBook::from(InnerOrderBook {
                         last_update_time: Default::default(),
                         bids: OrderBookSide {
                             side: Side::Buy,
@@ -493,12 +605,12 @@ mod tests {
                             side: Side::Sell,
                             levels: vec![],
                         },
-                    },
+                    }),
                     expected: None,
                 },
                 TestCase {
                     // TC1: no asks in the book so take best bid price
-                    input: OrderBook {
+                    input: OrderBook::from(InnerOrderBook {
                         last_update_time: Default::default(),
                         bids: OrderBookSide {
                             side: Side::Buy,
@@ -508,12 +620,12 @@ mod tests {
                             side: Side::Sell,
                             levels: vec![],
                         },
-                    },
+                    }),
                     expected: Some(100.0),
                 },
                 TestCase {
                     // TC2: no bids in the book so take ask price
-                    input: OrderBook {
+                    input: OrderBook::from(InnerOrderBook {
                         last_update_time: Default::default(),
                         bids: OrderBookSide {
                             side: Side::Buy,
@@ -523,12 +635,12 @@ mod tests {
                             side: Side::Sell,
                             levels: vec![Level::new(50.0, 100.0), Level::new(100.0, 100.0)],
                         },
-                    },
+                    }),
                     expected: Some(50.0),
                 },
                 TestCase {
                     // TC3: best bid and ask amount is the same, so regular mid-price
-                    input: OrderBook {
+                    input: OrderBook::from(InnerOrderBook {
                         last_update_time: Default::default(),
                         bids: OrderBookSide {
                             side: Side::Buy,
@@ -538,12 +650,12 @@ mod tests {
                             side: Side::Sell,
                             levels: vec![Level::new(200.0, 100.0), Level::new(300.0, 100.0)],
                         },
-                    },
+                    }),
                     expected: Some(150.0),
                 },
                 TestCase {
                     // TC4: valid volume weighted mid-price
-                    input: OrderBook {
+                    input: OrderBook::from(InnerOrderBook {
                         last_update_time: Default::default(),
                         bids: OrderBookSide {
                             side: Side::Buy,
@@ -553,7 +665,7 @@ mod tests {
                             side: Side::Sell,
                             levels: vec![Level::new(200.0, 1000.0), Level::new(300.0, 100.0)],
                         },
-                    },
+                    }),
                     expected: Some(175.0),
                 },
             ];
@@ -583,36 +695,36 @@ mod tests {
                 TestCase {
                     // TC0: Level exists & new value is 0 => remove Level
                     book_side: OrderBookSide::new(
-                        Side::Buy,
+                        Side::Sell,
                         vec![Level::new(80, 1), Level::new(90, 1), Level::new(100, 1)],
                     ),
                     new_level: Level::new(100, 0),
                     expected: OrderBookSide::new(
-                        Side::Buy,
+                        Side::Sell,
                         vec![Level::new(80, 1), Level::new(90, 1)],
                     ),
                 },
                 TestCase {
                     // TC1: Level exists & new value is > 0 => replace Level
                     book_side: OrderBookSide::new(
-                        Side::Buy,
+                        Side::Sell,
                         vec![Level::new(80, 1), Level::new(90, 1), Level::new(100, 1)],
                     ),
                     new_level: Level::new(100, 10),
                     expected: OrderBookSide::new(
-                        Side::Buy,
+                        Side::Sell,
                         vec![Level::new(80, 1), Level::new(90, 1), Level::new(100, 10)],
                     ),
                 },
                 TestCase {
                     // TC2: Level does not exist & new value > 0 => insert new Level
                     book_side: OrderBookSide::new(
-                        Side::Buy,
+                        Side::Sell,
                         vec![Level::new(80, 1), Level::new(90, 1), Level::new(100, 1)],
                     ),
                     new_level: Level::new(110, 1),
                     expected: OrderBookSide::new(
-                        Side::Buy,
+                        Side::Sell,
                         vec![
                             Level::new(80, 1),
                             Level::new(90, 1),

@@ -16,6 +16,9 @@ use tracing::{error, info, warn};
 /// of repeated disconnections with re-initialisation failures.
 pub const STARTING_RECONNECT_BACKOFF_MS: u64 = 125;
 
+pub type StreamTransformer<Exchange, Kind> =
+    <<Exchange as StreamSelector<Kind>>::Stream as MarketStream<Exchange, Kind>>::Transformer;
+
 /// Central [`MarketEvent<T>`](MarketEvent) consumer loop.
 ///
 /// Initialises an exchange [`MarketStream`] using a collection of [`Subscription`]s. Consumed
@@ -24,6 +27,7 @@ pub const STARTING_RECONNECT_BACKOFF_MS: u64 = 125;
 pub async fn consume<Exchange, Kind>(
     subscriptions: Vec<Subscription<Exchange, Kind>>,
     exchange_tx: mpsc::UnboundedSender<MarketEvent<Kind::Event>>,
+    transformer: StreamTransformer<Exchange, Kind>,
     backtest_mode: BacktestMode,
 ) -> DataError
 where
@@ -52,7 +56,14 @@ where
         info!(%exchange, attempt, "attempting to initialise MarketStream");
 
         // Attempt to initialise MarketStream: if it fails on first attempt return DataError
-        let mut stream = match Exchange::Stream::init(&subscriptions, backtest_mode).await {
+        let mut stream = match Exchange::Stream::init(
+            &subscriptions,
+            // TODO could return transformer in case of error
+            transformer.clone(),
+            backtest_mode,
+        )
+        .await
+        {
             Ok(stream) => {
                 info!(%exchange, attempt, "successfully initialised MarketStream");
                 attempt = 0;

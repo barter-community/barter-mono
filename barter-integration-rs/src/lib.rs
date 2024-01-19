@@ -20,12 +20,10 @@
 
 use crate::{
     error::SocketError,
-    protocol::{flat_files, flat_files::BacktestMode, websocket::WsMessage, StreamParser},
+    protocol::{flat_files, flat_files::BacktestMode, StreamParser},
 };
-use chrono::Timelike;
 use futures::Stream;
 use pin_project::pin_project;
-use protocol::websocket::{WebSocketParser, WsError};
 use serde::Deserialize;
 use std::{
     collections::VecDeque,

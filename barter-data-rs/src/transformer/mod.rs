@@ -23,15 +23,29 @@ pub mod stateless;
 #[async_trait]
 pub trait ExchangeTransformer<Exchange, Kind>
 where
-    Self: Transformer<Output = MarketEvent<Kind::Event>, Error = DataError> + Sized,
+    Self: Transformer<Output = MarketEvent<Kind::Event>, Error = DataError> + Sized + Clone,
     Kind: SubKind,
 {
     /// Construct a new [`Self`].
     ///
-    /// The [`mpsc::UnboundedSender`] can be used by [`Self`] to send messages back to the exchange.
     async fn new(
-        ws_sink_tx: mpsc::UnboundedSender<WsMessage>,
         instrument_map: Map<Instrument>,
         backtest_mode: BacktestMode,
     ) -> Result<Self, DataError>;
+
+    async fn init_connection(
+        &mut self,
+        _instrument_map: Map<Instrument>,
+        _backtest_mode: BacktestMode,
+    ) -> Result<&Self, DataError> {
+        Ok(self)
+    }
+
+    /// The [`mpsc::UnboundedSender`] can be used by [`Self`] to send messages back to the exchange.
+    async fn add_sender(
+        &mut self,
+        _ws_sink_tx: mpsc::UnboundedSender<WsMessage>,
+    ) -> Result<(), DataError> {
+        Ok(())
+    }
 }

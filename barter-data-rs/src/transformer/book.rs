@@ -9,13 +9,11 @@ use crate::{
 use async_trait::async_trait;
 use barter_integration::{
     model::{instrument::Instrument, SubscriptionId},
-    protocol::{flat_files::BacktestMode, websocket::WsMessage},
+    protocol::flat_files::BacktestMode,
     Transformer,
 };
 use serde::{Deserialize, Serialize};
-use std::{fs::File, io::Write, marker::PhantomData, sync::Arc};
-use tokio;
-use tokio::sync::mpsc;
+use std::{collections::HashMap, fs::File, io::Write, marker::PhantomData, sync::Arc};
 
 /// Defines how to apply a [`Self::Update`] to an [`Self::OrderBook`].
 #[async_trait]
@@ -52,7 +50,7 @@ where
 
 /// [`OrderBook`] for an [`Instrument`] with an exchange specific [`OrderBookUpdater`] to define
 /// how to update it.
-#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
 pub struct InstrumentOrderBook<Updater> {
     pub instrument: Instrument,
     pub updater: Updater,
@@ -62,7 +60,7 @@ pub struct InstrumentOrderBook<Updater> {
 /// Standard generic [`ExchangeTransformer`] to translate exchange specific OrderBook types into
 /// normalised Barter OrderBook types. Requires an exchange specific [`OrderBookUpdater`]
 /// implementation.
-#[derive(Clone, PartialEq, Eq, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
 pub struct MultiBookTransformer<Exchange, Kind, Updater> {
     pub book_map: Map<InstrumentOrderBook<Updater>>,
     phantom: PhantomData<(Exchange, Kind)>,
@@ -70,6 +68,13 @@ pub struct MultiBookTransformer<Exchange, Kind, Updater> {
 
 impl<Exchange, Kind, Updater> MultiBookTransformer<Exchange, Kind, Updater> {
     pub fn init_book_map(book_map: Map<InstrumentOrderBook<Updater>>) -> Result<Self, DataError> {
+        // make sure to sort the orderbooks
+        for (_, inst_book) in book_map.0.iter() {
+            let mut lock = inst_book.book.book.lock();
+            lock.asks.sort();
+            lock.bids.sort();
+        }
+
         Ok(Self {
             book_map,
             phantom: PhantomData::default(),
@@ -83,15 +88,25 @@ impl<Exchange, Kind, Updater> ExchangeTransformer<Exchange, Kind>
 where
     Exchange: Connector + Send,
     Kind: SubKind<Event = OrderBook> + Send,
-    Updater: OrderBookUpdater<OrderBook = Kind::Event> + Send,
+    Updater: OrderBookUpdater<OrderBook = Kind::Event> + Send + Clone,
     Updater::Update: Identifier<Option<SubscriptionId>> + for<'de> Deserialize<'de>,
     Updater::Snapshot: Serialize,
 {
-    async fn new(
-        _: mpsc::UnboundedSender<WsMessage>,
+    async fn new(_map: Map<Instrument>, _backtest_mode: BacktestMode) -> Result<Self, DataError> {
+        // Construct empty OrderBookMap
+        let book_map = HashMap::new();
+
+        Ok(Self {
+            book_map: Map(book_map),
+            phantom: PhantomData::default(),
+        })
+    }
+
+    async fn init_connection(
+        &mut self,
         map: Map<Instrument>,
         backtest_mode: BacktestMode,
-    ) -> Result<Self, DataError> {
+    ) -> Result<&Self, DataError> {
         // Initialise InstrumentOrderBooks for all Subscriptions
         let (sub_ids, init_book_requests): (Vec<_>, Vec<_>) = map
             .0
@@ -135,10 +150,20 @@ where
             .zip(init_order_books.into_iter())
             .collect::<Map<InstrumentOrderBook<Updater>>>();
 
-        Ok(Self {
-            book_map,
-            phantom: PhantomData::default(),
-        })
+        // make sure to sort the orderbooks
+        for (_, inst_book) in book_map.0.iter() {
+            let mut lock = inst_book.book.book.lock();
+            lock.asks.sort();
+            lock.bids.sort();
+        }
+
+        self.book_map = book_map;
+
+        Ok(self)
+        // Ok(Self {
+        //     book_map,
+        //     phantom: PhantomData::default(),
+        // })
     }
 }
 
@@ -174,8 +199,10 @@ where
             updater,
         } = book;
 
+        let mut book = book.clone();
+
         // Apply update (snapshot or delta) to OrderBook & generate Market<OrderBook> snapshot
-        match updater.update(book, update) {
+        match updater.update(&mut book, update) {
             Ok(Some(book)) => {
                 MarketIter::<OrderBook>::from((Exchange::ID, instrument.clone(), book)).0
             }

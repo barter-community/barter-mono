@@ -30,7 +30,7 @@ use barter_data::{
         Connector,
     },
     subscription::book::{OrderBook, OrderBooksL2},
-    subscription::Map,
+    subscription::{book::InnerOrderBook, Map},
     transformer::book::{InstrumentOrderBook, MultiBookTransformer, OrderBookUpdater},
 };
 use barter_integration::{
@@ -155,7 +155,7 @@ async fn init_data_stream(tx: mpsc::UnboundedSender<MarketEvent<DataKind>>) -> R
     let snapshot: BinanceOrderBookL2Snapshot = load_snapshot::<BinanceSpotBookUpdater>(SNAPSHOT);
     let updater = BinanceSpotBookUpdater::new(snapshot.last_update_id);
 
-    let book = OrderBook::from(snapshot);
+    let book = OrderBook::from(InnerOrderBook::from(snapshot));
 
     let instrument = Instrument::from(("eth", "usdt", InstrumentKind::Spot));
 
@@ -197,7 +197,7 @@ async fn init_data_stream(tx: mpsc::UnboundedSender<MarketEvent<DataKind>>) -> R
 
         let order_book_msg = match WebSocketParser::parse::<BinanceSpotOrderBookL2Delta>(Ok(msg)) {
             Some(Ok(exchange_message)) => Some(exchange_message),
-            Some(Err(err)) => None,
+            Some(Err(_err)) => None,
             None => panic!("failed to parse2"),
         };
 
@@ -261,10 +261,8 @@ where
         updater,
     };
 
-    let ex_id = Exchange::ID.to_string();
-    let id: SubscriptionId = SubscriptionId(String::from(ex_id));
-
     // TODO need to figure out how to get this
+    // See the refactor ex
     let id = SubscriptionId("@depth@100ms|ETHUSDT".to_string());
 
     let mut book_map = HashMap::new();

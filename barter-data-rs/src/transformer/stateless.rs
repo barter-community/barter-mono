@@ -9,12 +9,11 @@ use crate::{
 use async_trait::async_trait;
 use barter_integration::{
     model::{instrument::Instrument, SubscriptionId},
-    protocol::{flat_files::BacktestMode, websocket::WsMessage},
+    protocol::flat_files::BacktestMode,
     Transformer,
 };
 use serde::{Deserialize, Serialize};
 use std::marker::PhantomData;
-use tokio::sync::mpsc;
 
 /// Standard generic stateless [`ExchangeTransformer`] to translate exchange specific types into
 /// normalised Barter types. Often used with
@@ -32,14 +31,10 @@ impl<Exchange, Kind, Input> ExchangeTransformer<Exchange, Kind>
 where
     Exchange: Connector + Send,
     Kind: SubKind + Send,
-    Input: Identifier<Option<SubscriptionId>> + for<'de> Deserialize<'de>,
+    Input: Identifier<Option<SubscriptionId>> + for<'de> Deserialize<'de> + Clone,
     MarketIter<Kind::Event>: From<(ExchangeId, Instrument, Input)>,
 {
-    async fn new(
-        _: mpsc::UnboundedSender<WsMessage>,
-        instrument_map: Map<Instrument>,
-        _: BacktestMode,
-    ) -> Result<Self, DataError> {
+    async fn new(instrument_map: Map<Instrument>, _: BacktestMode) -> Result<Self, DataError> {
         Ok(Self {
             instrument_map,
             phantom: PhantomData::default(),

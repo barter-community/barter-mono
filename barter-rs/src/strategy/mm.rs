@@ -1,18 +1,14 @@
 use super::glft::*;
-use super::{Decision, Signal, SignalGenerator, SignalStrength};
-use crate::data::MarketMeta;
+use super::{Signal, SignalGenerator};
 use barter_data::{
-    event::{self, DataKind, MarketEvent},
-    exchange::binance::market,
+    event::{DataKind, MarketEvent},
     subscription::trade::PublicTrade,
 };
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, Timelike, Utc};
 use ndarray::prelude::*;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
-use ta::{indicators::RelativeStrengthIndex, Next};
 
-use tracing::{error, info};
+use tracing::{error, warn};
 
 const INTERVAL: i64 = 100; // ms interval for measurments
 const GAMMA: f64 = 0.05;
@@ -87,7 +83,11 @@ impl SignalGenerator for GLFTStrategy {
     }
 
     fn on_market_feed_finished(&mut self) {
-        self.update_strategy_params();
+        if self.measurement_params.index > 6000 {
+            self.update_strategy_params();
+        } else {
+            warn!("Not enough data to calibarate model")
+        }
     }
 }
 
@@ -116,7 +116,8 @@ impl GLFTStrategy {
         let elapsed = event_time - self.last_exchange_time.unwrap();
         self.last_trades.push(trade.clone());
 
-        if elapsed.num_milliseconds() > INTERVAL {
+        // TODO we actually want to run this at fixed 100ms intervals
+        if elapsed.num_milliseconds() >= INTERVAL {
             // this updates measurement_params
             measure_trading_intensity_and_volatility(
                 &mut self.last_trades,
@@ -127,14 +128,22 @@ impl GLFTStrategy {
             self.last_exchange_time = Some(event_time);
             self.last_trades.clear();
 
+            // just in case we run out of space in the arrays
+
+            let index = self.measurement_params.index;
+            if index == self.arrival_depth.len() - 1 {
+                reset_array(&mut self.mid_price_chg, index);
+                reset_array(&mut self.arrival_depth, index);
+                self.measurement_params.index = 6000;
+            }
+
             // --------------------------------------------------------
             // Calibrates A, k and calculates the market volatility.
 
-            // Updates A, k, and the volatility every 5-sec.
-            // window is 10 min
             let elapsed = event_time - self.last_update;
 
-            if (elapsed.num_seconds() % 5) == 0 && elapsed.num_minutes() >= 10 {
+            // Updates A, k, and the volatility every 5-sec. (initiali window is 10 min)
+            if elapsed.num_seconds() > 5 && self.measurement_params.index > 6000 {
                 self.update_strategy_params();
                 self.last_update = event_time;
             }
@@ -143,10 +152,14 @@ impl GLFTStrategy {
 
     #[allow(non_snake_case)]
     fn update_strategy_params(&mut self) {
-        match get_params(self.arrival_depth.view(), self.mid_price_chg.view()) {
+        match get_params(
+            self.arrival_depth.view(),
+            self.mid_price_chg.view(),
+            self.measurement_params.index,
+        ) {
             Ok((A, k, volatility)) => {
-                println!("A: {}", A);
-                println!("k: {}", k);
+                // println!("A: {}", A);
+                // println!("k: {}", k);
                 let (c1, c2) = compute_coeff(GAMMA, GAMMA, DELTA, A, k);
                 self.c1 = c1;
                 self.c2 = c2;
@@ -160,13 +173,15 @@ impl GLFTStrategy {
         let half_spread = 1.0 * self.c1 + 1.0 / 2.0 * self.c2 * self.volatility;
         let skew = self.c2 * self.volatility;
 
-        println!("~~~~~~");
-        println!("date: {}", self.last_update);
-        println!("c1: {}", self.c1);
-        println!("c2: {}", self.c2);
-        println!("volatility: {}", self.volatility);
-        println!("half_spread: {}", half_spread);
-        println!("skew: {}", skew);
+        if (self.last_update.minute() % 10) == 0 && self.last_update.second() < 5 {
+            println!("~~~~~~");
+            println!("date: {}", self.last_update);
+            println!("c1: {}", self.c1);
+            println!("c2: {}", self.c2);
+            println!("volatility: {}", self.volatility);
+            println!("half_spread: {}", half_spread);
+            println!("skew: {}", skew);
+        }
     }
 
     // /// Given the latest RSI value for a symbol, generates a map containing the [`SignalStrength`] for
