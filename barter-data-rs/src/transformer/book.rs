@@ -160,10 +160,6 @@ where
         self.book_map = book_map;
 
         Ok(self)
-        // Ok(Self {
-        //     book_map,
-        //     phantom: PhantomData::default(),
-        // })
     }
 }
 
