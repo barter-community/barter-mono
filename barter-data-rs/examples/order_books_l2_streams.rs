@@ -1,6 +1,6 @@
 use barter_data::{
     event::{DataKind, MarketEvent},
-    exchange::{binance::spot::BinanceSpot, ExchangeId},
+    exchange::binance::spot::BinanceSpot,
     streams::Streams,
     subscription::{book::OrderBooksL2, trade::PublicTrades},
 };
