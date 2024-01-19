@@ -11,7 +11,7 @@ use tracing::info;
 
 // use tracing::info;
 
-static BACKTEST_MODE: BacktestMode = BacktestMode::None;
+static BACKTEST_MODE: BacktestMode = BacktestMode::ToFile;
 
 #[rustfmt::skip]
 #[tokio::main]
@@ -77,7 +77,7 @@ async fn main() {
 
     // Spawn a new asynchronous task to handle writing to the file
     while let Some( data) = binance_stream.recv().await {
-        info!("{data:#?}");
+        // info!("{data:#?}");
     }  
 }
 

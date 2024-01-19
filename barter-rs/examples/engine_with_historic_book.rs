@@ -55,8 +55,8 @@ use futures::stream::{self, StreamExt};
 
 use uuid::Uuid;
 
-const ORDER_BOOK_DELTAS: &str = "data/binance_l2_2024_01_14.dat";
-const SNAPSHOT: &str = "data/snapshot_@depth@100ms|ETHUSDT_2024-01-13.json";
+const ORDER_BOOK_DELTAS: &str = "data/binance_l2_2024_01_18_20.dat";
+const SNAPSHOT: &str = "data/snapshot_@depth@100ms|ETHUSDT_2024-01-19.json";
 
 #[tokio::main]
 async fn main() {
