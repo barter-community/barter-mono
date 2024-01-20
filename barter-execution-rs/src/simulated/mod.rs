@@ -228,11 +228,11 @@ impl SimulatedExchange {
 
 #[cfg(test)]
 mod tests {
-    use barter_integration::model::{Exchange, InstrumentKind};
-    use barter_data::builder::Streams;
-    use barter_data::ExchangeId;
-    use barter_data::model::{DataKind, MarketEvent};
-    use barter_data::model::subscription::SubKind;
+    use barter_integration::model::{Exchange, instrument::kind::InstrumentKind};
+    use barter_data::streams::Streams;
+    use barter_data::exchange::ExchangeId;
+    use barter_data::event::{DataKind, MarketEvent};
+    use barter_data::subscription::SubKind;
     use super::*;
 
     // #[tokio::test]

@@ -1,6 +1,6 @@
 use std::cmp::Ordering;
 use super::ClientOrderId;
-use barter_integration::model::{Exchange, Instrument, Side};
+use barter_integration::model::{Exchange, instrument::Instrument, Side};
 use serde::{Deserialize, Serialize};
 use std::fmt::{Display, Formatter};
 

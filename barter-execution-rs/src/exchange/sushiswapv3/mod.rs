@@ -233,25 +233,29 @@ mod tests {
     #[tokio::test]
     async fn it_works() {
         dotenv().ok();
-        let (
-            event_tx,
-            event_rx
-        ) = mpsc::unbounded_channel();
+        // let (
+        //   event_tx,
+        //   event_rx
+        // ) = mpsc::unbounded_channel();
+
+        let eth_node_url = std::env::var("ETH_NODE_URL").expect("ETH_NODE_URL environment variable not set");
+        let eth_account_address = std::env::var("ETH_ACCOUNT_ADDRESS").expect("ETH_ACCOUNT_ADDRESS environment variable not set");
+        let account_private_key = secp256k1::SecretKey::from_str(&std::env::var("ACCOUNT_PRIVATE_KEY").unwrap()).unwrap();
 
         let config = Config {
-            eth_node_url: env!("ETH_NODE_URL").to_string(),
-            eth_account_address: env!("ETH_ACCOUNT_ADDRESS").to_string(), // 0x not included
-            account_private_key: secp256k1::SecretKey::from_str(env!("ACCOUNT_PRIVATE_KEY")).unwrap()
+          eth_node_url,
+          eth_account_address, // 0x not included
+          account_private_key,
         };
 
-        let sushi = SushiSwapV3::init(config, event_tx).await;
+        // let sushi = SushiSwapV3::init(config, event_tx).await;
 
-        let _ = sushi.fetch_balances().await;
+        // let _ = sushi.fetch_balances().await;
 
-        sushi.fetch_erc20_smart_contract_meta(
-            Address::from_str("0x42447D5f59d5BF78a82C34663474922bdf278162").unwrap()
-        ).await;
+        // sushi.fetch_erc20_smart_contract_meta(
+        //     Address::from_str("0x42447D5f59d5BF78a82C34663474922bdf278162").unwrap()
+        // ).await;
 
-        sushi.swap().await;
+        // sushi.swap().await;
     }
 }

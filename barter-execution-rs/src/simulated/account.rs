@@ -3,7 +3,11 @@ use crate::{
     model::{AccountEvent, AccountEventKind, balance::Balance, trade::{SymbolFees, Trade, TradeId}},
     SymbolBalance
 };
-use barter_integration::model::{Instrument, Side, Symbol};
+use barter_integration::model::{
+  instrument::Instrument, 
+  Side, 
+  instrument::symbol::Symbol
+};
 use barter_data::subscription::trade::PublicTrade;
 use std::collections::HashMap;
 use serde::{Deserialize, Serialize};
@@ -57,7 +61,7 @@ impl ClientAccount {
 
     pub fn match_bids(&mut self, instrument: &Instrument, trade: &PublicTrade) {
         // Keep track of how much trade liquidity is remaining to match with
-        let mut remaining_liquidity = trade.quantity;
+        let mut remaining_liquidity = trade.amount;
 
         let best_bid = loop {
             // Pop the best bid Order<Open>
