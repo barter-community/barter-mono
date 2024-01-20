@@ -15,7 +15,6 @@ use barter_integration::model::instrument::kind::InstrumentKind;
 use tokio_stream::StreamExt;
 use tracing::info;
 
-#[rustfmt::skip]
 #[tokio::main]
 async fn main() {
     // Initialise INFO Tracing log subscriber
@@ -28,42 +27,64 @@ async fn main() {
 
     // Initialise MarketEvent<DataKind> Streams for various exchanges
     let streams: Streams<MarketEvent<DataKind>> = Streams::builder_multi()
-
         // Add PublicTrades Streams for various exchanges
-        .add(Streams::<PublicTrades>::builder()
-            .subscribe([
-                (BinanceSpot::default(), "btc", "usdt", InstrumentKind::Spot, PublicTrades),
-            ])
-            .subscribe([
-                (BinanceFuturesUsd::default(), "btc", "usdt", InstrumentKind::Perpetual, PublicTrades),
-            ])
-            .subscribe([
-                (Okx, "btc", "usdt", InstrumentKind::Spot, PublicTrades),
-                (Okx, "btc", "usdt", InstrumentKind::Perpetual, PublicTrades),
-            ])
+        .add(
+            Streams::<PublicTrades>::builder()
+                .subscribe([(
+                    BinanceSpot::default(),
+                    "btc",
+                    "usdt",
+                    InstrumentKind::Spot,
+                    PublicTrades,
+                )])
+                .subscribe([(
+                    BinanceFuturesUsd::default(),
+                    "btc",
+                    "usdt",
+                    InstrumentKind::Perpetual,
+                    PublicTrades,
+                )])
+                .subscribe([
+                    (Okx, "btc", "usdt", InstrumentKind::Spot, PublicTrades),
+                    (Okx, "btc", "usdt", InstrumentKind::Perpetual, PublicTrades),
+                ]),
         )
-
         // Add OrderBooksL1 Stream for various exchanges
-        .add(Streams::<OrderBooksL1>::builder()
-            .subscribe([
-                (BinanceSpot::default(), "btc", "usdt", InstrumentKind::Spot, OrderBooksL1),
-            ])
-            .subscribe([
-                (BinanceFuturesUsd::default(), "btc", "usdt", InstrumentKind::Perpetual, OrderBooksL1),
-            ])
-            .subscribe([
-                (Kraken, "xbt", "usd", InstrumentKind::Spot, OrderBooksL1),
-            ])
+        .add(
+            Streams::<OrderBooksL1>::builder()
+                .subscribe([(
+                    BinanceSpot::default(),
+                    "btc",
+                    "usdt",
+                    InstrumentKind::Spot,
+                    OrderBooksL1,
+                )])
+                .subscribe([(
+                    BinanceFuturesUsd::default(),
+                    "btc",
+                    "usdt",
+                    InstrumentKind::Perpetual,
+                    OrderBooksL1,
+                )])
+                .subscribe([(Kraken, "xbt", "usd", InstrumentKind::Spot, OrderBooksL1)]),
         )
-
         // Add OrderBooksL2 Stream for various exchanges
-        .add(Streams::<OrderBooksL2>::builder()
-            .subscribe([
-                (BinanceSpot::default(), "btc", "usdt", InstrumentKind::Spot, OrderBooksL2),
-            ])
-            .subscribe([
-                (BinanceFuturesUsd::default(), "btc", "usdt", InstrumentKind::Perpetual, OrderBooksL2),
-            ])
+        .add(
+            Streams::<OrderBooksL2>::builder()
+                .subscribe([(
+                    BinanceSpot::default(),
+                    "btc",
+                    "usdt",
+                    InstrumentKind::Spot,
+                    OrderBooksL2,
+                )])
+                .subscribe([(
+                    BinanceFuturesUsd::default(),
+                    "btc",
+                    "usdt",
+                    InstrumentKind::Perpetual,
+                    OrderBooksL2,
+                )]),
         )
         .init()
         .await

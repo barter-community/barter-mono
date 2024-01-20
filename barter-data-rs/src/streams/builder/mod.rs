@@ -2,9 +2,11 @@ use super::{consumer::consume, Streams};
 use crate::{
     error::DataError,
     event::MarketEvent,
-    exchange::{ExchangeId, StreamSelector},
-    subscription::{SubKind, Subscription},
-    Identifier,
+    exchange::{Connector, ExchangeId, StreamSelector},
+    subscriber::{mapper::SubscriptionMapper, Subscriber},
+    subscription::{SubKind, Subscription, SubscriptionMeta},
+    transformer::ExchangeTransformer,
+    Identifier, MarketStream,
 };
 use barter_integration::{error::SocketError, protocol::flat_files::BacktestMode, Validator};
 use std::{collections::HashMap, fmt::Debug, future::Future, pin::Pin};
@@ -66,18 +68,6 @@ where
         self.subscribe_bt(subscriptions, BacktestMode::None)
     }
 
-    // pub fn subscribe<SubIter, Sub, Exchange>(self, subscriptions: SubIter) -> Self
-    // where
-    //     SubIter: IntoIterator<Item = Sub>,
-    //     Sub: Into<Subscription<Exchange, Kind>>,
-    //     Exchange: StreamSelector<Kind> + Ord + Send + Sync + 'static,
-    //     Kind: Ord + Send + Sync + 'static,
-    //     Kind::Event: Send,
-    //     Subscription<Exchange, Kind>: Identifier<Exchange::Channel> + Identifier<Exchange::Market>,
-    // {
-    //     self.subscribe_bt(subscriptions, BacktestMode::None)
-    // }
-
     /// Add a collection of [`Subscription`]s to the [`StreamBuilder`] that will be actioned on
     /// a distinct [`WebSocket`](barter_integration::protocol::websocket::WebSocket) connection.
     ///
@@ -91,13 +81,18 @@ where
     where
         SubIter: IntoIterator<Item = Sub>,
         Sub: Into<Subscription<Exchange, Kind>>,
-        Exchange: StreamSelector<Kind> + Ord + Send + Sync + 'static,
+        Exchange: Connector + StreamSelector<Kind> + Ord + Send + Sync + 'static,
         Kind: Ord + Send + Sync + 'static,
         Kind::Event: Send,
         Subscription<Exchange, Kind>: Identifier<Exchange::Channel> + Identifier<Exchange::Market>,
+        <Exchange::Stream as MarketStream<Exchange, Kind>>::Transformer:
+            ExchangeTransformer<Exchange, Kind> + Send + Sync,
     {
         // Construct Vec<Subscriptions> from input SubIter
-        let mut subscriptions = subscriptions.into_iter().map(Sub::into).collect::<Vec<_>>();
+        let mut subscriptions = subscriptions
+            .into_iter()
+            .map(Sub::into)
+            .collect::<Vec<Subscription<Exchange, Kind>>>();
 
         // Acquire channel Sender to send Market<Kind::Event> from consumer loop to user
         // '--> Add ExchangeChannel Entry if this Exchange <--> SubKind combination is new
@@ -112,8 +107,27 @@ where
             subscriptions.sort();
             subscriptions.dedup();
 
+            let SubscriptionMeta {
+                instrument_map,
+                subscriptions: _subs,
+            } = <<Exchange::Subscriber as Subscriber>::SubMapper as SubscriptionMapper>::map(
+                &subscriptions,
+            );
+
+            let transformer = <Exchange::Stream as MarketStream<Exchange, Kind>>::Transformer::new(
+                instrument_map,
+                backtest_mode,
+            )
+            .await
+            .unwrap();
+
             // Spawn a MarketStream consumer loop with these Subscriptions<Exchange, Kind>
-            tokio::spawn(consume(subscriptions, exchange_tx, backtest_mode));
+            tokio::spawn(consume(
+                subscriptions,
+                exchange_tx,
+                transformer,
+                backtest_mode,
+            ));
 
             Ok(())
         }));
