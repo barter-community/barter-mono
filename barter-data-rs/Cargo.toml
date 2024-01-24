@@ -48,3 +48,7 @@ ta = "0.5.0"
 # Misc
 chrono = { version = "0.4.21", features = ["serde"] }
 parking_lot = "0.12.1"
+ethers = { version = "2.0.11", features = ["ws", "rustls"] }
+eyre = "0.6.11"
+dotenv = "0.15.0"
+actix-web = "4.4.1"

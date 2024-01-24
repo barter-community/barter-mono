@@ -107,6 +107,9 @@ pub mod error;
 /// Defines the generic [`MarketEvent<T>`](event::MarketEvent) used in every [`MarketStream`].
 pub mod event;
 
+/// [`**`] implementations for each DEX.
+pub mod dex;
+
 /// [`Connector`] implementations for each exchange.
 pub mod exchange;
 

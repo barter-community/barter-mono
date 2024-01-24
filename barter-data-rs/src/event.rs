@@ -1,4 +1,5 @@
 use crate::{
+    dex::uniswapx::TransferFilter,
     error::DataError,
     subscription::{
         book::{OrderBook, OrderBookL1},
@@ -60,6 +61,7 @@ pub enum DataKind {
     OrderBook(OrderBook),
     Candle(Candle),
     Liquidation(Liquidation),
+    Erc20Transfer(TransferFilter),
 }
 
 impl From<MarketEvent<PublicTrade>> for MarketEvent<DataKind> {
