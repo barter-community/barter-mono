@@ -2,7 +2,6 @@ use crate::{
     data::MarketGenerator,
     engine::{error::EngineError, trader::Trader},
     event::{Event, MessageTransmitter},
-    execution::ExecutionClient,
     portfolio::{
         position::Position,
         repository::{PositionHandler, StatisticHandler},
@@ -12,6 +11,7 @@ use crate::{
     strategy::SignalGenerator,
 };
 use barter_data::event::{DataKind, MarketEvent};
+use barter_execution::ExecutionClient;
 use barter_integration::model::{Market, MarketId};
 use parking_lot::Mutex;
 use prettytable::Table;

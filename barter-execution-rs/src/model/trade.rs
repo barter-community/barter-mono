@@ -1,10 +1,7 @@
 use super::order::OrderId;
 use barter_integration::model::{
-  instrument::{ 
-    Instrument, 
-    symbol::Symbol
-  },
-  Side
+    instrument::{symbol::Symbol, Instrument},
+    Side,
 };
 use serde::{Deserialize, Serialize};
 
@@ -47,8 +44,11 @@ impl SymbolFees {
     /// Construct a new [`SymbolFees`].
     pub fn new<S>(symbol: S, fees: f64) -> Self
     where
-        S: Into<Symbol>
-{
-    Self { symbol: symbol.into(), fees }
-}
+        S: Into<Symbol>,
+    {
+        Self {
+            symbol: symbol.into(),
+            fees,
+        }
+    }
 }

@@ -1,9 +1,6 @@
-use crate::{
-    execution::{FeeAmount, Fees, FillEvent},
-    portfolio::{error::PortfolioError, Balance},
-    strategy::Decision,
-};
+use crate::portfolio::{error::PortfolioError, Balance};
 use barter_data::event::{DataKind, MarketEvent};
+use barter_execution::fill::{Decision, FeeAmount, Fees, FillEvent};
 use barter_integration::model::{instrument::Instrument, Exchange, Side};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};

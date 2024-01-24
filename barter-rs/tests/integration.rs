@@ -2,10 +2,6 @@ use barter::{
     data::historical,
     engine::{trader::Trader, Engine},
     event::EventTx,
-    execution::{
-        simulated::{Config as ExecutionConfig, SimulatedExecution},
-        Fees,
-    },
     portfolio::{
         allocator::DefaultAllocator, portfolio::MetaPortfolio,
         repository::in_memory::InMemoryRepository, risk::DefaultRisk,
@@ -16,6 +12,11 @@ use barter::{
     },
     strategy::example::{Config as StrategyConfig, RSIStrategy},
     test_util::market_event_trade,
+};
+use barter_execution::{
+    fill::Fees,
+    simulated::execution::{SimulatedExecution, SimulationConfig},
+    ExecutionClient,
 };
 use barter_integration::model::{instrument::kind::InstrumentKind, Market, Side};
 use parking_lot::Mutex;
@@ -75,13 +76,20 @@ async fn engine_with_historic_data_stops_after_candles_finished() {
                 [market_event_trade(Side::Buy)].into_iter(),
             ))
             .strategy(RSIStrategy::new(StrategyConfig { rsi_period: 14 }))
-            .execution(SimulatedExecution::new(ExecutionConfig {
-                simulated_fees_pct: Fees {
-                    exchange: 0.1,
-                    slippage: 0.05,
-                    network: 0.0,
-                },
-            }))
+            .execution(
+                SimulatedExecution::init(
+                    SimulationConfig {
+                        simulated_fees_pct: Fees {
+                            exchange: 0.1,
+                            slippage: 0.05,
+                            network: 0.0,
+                        },
+                        request_tx: mpsc::unbounded_channel().0,
+                    },
+                    mpsc::unbounded_channel().0,
+                )
+                .await,
+            )
             .build()
             .expect("failed to build trader"),
     );

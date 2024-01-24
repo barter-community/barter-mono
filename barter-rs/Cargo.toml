@@ -17,6 +17,7 @@ categories = ["accessibility", "simulation"]
 # Barter Ecosystem
 barter-data = { version = "0.7.0", path = "../barter-data-rs" }
 barter-integration = { version = "0.5.3", path = "../barter-integration-rs" }
+barter-execution = { version = "0.3.0", path = "../barter-execution-rs" }
 
 # Logging
 tracing = "0.1.36"
@@ -26,6 +27,7 @@ tracing-subscriber = { version = "0.3.16", features = ["env-filter", "json"] }
 tokio = { version = "1.20.1", features = ["sync"] }
 tokio-stream = { version = "0.1.9", features = ["sync"] }
 futures = "0.3.21"
+async-trait = "0.1.57"
 
 # Error
 thiserror = "1.0.32"

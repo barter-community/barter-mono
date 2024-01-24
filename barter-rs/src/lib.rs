@@ -138,26 +138,31 @@
 //! ```
 //! use barter::{
 //!     test_util,
-//!     portfolio::OrderEvent,
-//!     execution::{
-//!         simulated::{Config as ExecutionConfig, SimulatedExecution},
-//!         Fees, ExecutionClient,
-//!     }
 //! };
+//! use barter_execution::{
+//!     fill::Fees,
+//!     simulated::execution::{SimulatedExecution, SimulationConfig},
+//!     ExecutionClient,
+//!     model::order_event::OrderEvent
+//!};
+//! use tokio::sync::mpsc;
 //!
-//! let config = ExecutionConfig {
+//! async fn init_execution() -> () {
+//! let config = SimulationConfig {
 //!     simulated_fees_pct: Fees {
 //!         exchange: 0.1,
 //!         slippage: 0.05, // Simulated slippage modelled as a Fee
 //!         network: 0.0,
-//!     }
+//!     },
+//!     request_tx: mpsc::unbounded_channel().0,
 //! };
 //!
-//! let mut execution = SimulatedExecution::new(config);
+//! let mut execution = SimulatedExecution::init(config, mpsc::unbounded_channel().0).await;
 //!
 //! let order_event = test_util::order_event();
 //!
 //! let fill_event = execution.generate_fill(&order_event);
+//! }
 //! ```
 //!
 //! ### Statistic
@@ -225,7 +230,7 @@ pub mod portfolio;
 /// Defines a FillEvent, and provides a useful trait FillGenerator for handling the generation
 /// of them. Contains an example SimulatedExecution implementation that simulates live broker
 /// execution.
-pub mod execution;
+// pub mod execution;
 
 /// Defines an Event enum that contains variants that are vital to the trading event loop
 /// (eg/ MarketEvent). Other variants communicate work done by the system (eg/ FillEvent), as well
@@ -250,16 +255,15 @@ extern crate prettytable;
 extern crate ndarray;
 
 pub mod test_util {
-    use crate::{
-        data::MarketMeta,
-        execution::{Fees, FillEvent},
-        portfolio::{position::Position, OrderEvent, OrderType},
-        strategy::{Decision, Signal},
-    };
+    use crate::{portfolio::position::Position, strategy::Signal};
     use barter_data::{
         event::{DataKind, MarketEvent},
         exchange::ExchangeId,
         subscription::{candle::Candle, trade::PublicTrade},
+    };
+    use barter_execution::{
+        fill::{Decision, Fees, FillEvent, MarketMeta},
+        model::order_event::{OrderEvent, OrderType},
     };
     use barter_integration::model::{
         instrument::{kind::InstrumentKind, Instrument},

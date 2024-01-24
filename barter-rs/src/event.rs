@@ -1,12 +1,12 @@
 use crate::{
-    execution::FillEvent,
     portfolio::{
         position::{Position, PositionExit, PositionUpdate},
-        Balance, OrderEvent,
+        Balance,
     },
     strategy::{Signal, SignalForceExit},
 };
 use barter_data::event::{DataKind, MarketEvent};
+use barter_execution::{fill::FillEvent, model::order_event::OrderEvent};
 use serde::{Deserialize, Serialize};
 use std::fmt::Debug;
 use tokio::sync::mpsc;

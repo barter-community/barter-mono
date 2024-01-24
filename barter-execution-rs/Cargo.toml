@@ -1,24 +1,31 @@
 [package]
 name = "barter-execution"
-version = "0.1.0"
+version = "0.3.0"
 edition = "2021"
+authors = ["Just A Stream <93921983+just-a-stream@users.noreply.github.com>"]
+license = "MIT"
+documentation = "https://docs.rs/barter-execution/"
+repository = "https://github.com/barter-rs/barter-execution-rs"
+readme = "README.md"
+description = "High-performance and normalised trading interface capable of executing across many financial venues. Also provides a feature rich simulated exchange."
+keywords = ["trading", "backtesting", "crypto", "stocks", "investment"]
+categories = ["accessibility", "simulation"]
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-
 # Barter Ecosystem
-barter-data = { version = "0.7.0", path = "../barter-data-rs" }
 barter-integration = { version = "0.5.3", path = "../barter-integration-rs" }
-
+barter-data = { version = "0.7.0", path = "../barter-data-rs" }
 
 # Logging
 tracing = "0.1.36"
 
 # Async
-tokio = { version = "1.20.1", features = ["full"] }
+tokio = { version = "1.17.0", features = ["sync", "macros", "rt-multi-thread"] }
 tokio-stream = { version = "0.1.9", features = ["sync"] }
-tokio-tungstenite = { version = "0.15.0", features = ["rustls-tls"] }
+tokio-tungstenite = { version = "0.18.0", features = [
+  "rustls-tls-webpki-roots",
+] }
 futures = "0.3.21"
 async-trait = "0.1.57"
 pin-project = "1.0.10"
@@ -31,14 +38,8 @@ thiserror = "1.0.32"
 serde = { version = "1.0.143", features = ["derive"] }
 serde_json = "1.0.83"
 
-# DeFi
-web3 = "0.18.0"
-hex = "0.4.3"
-secp256k1 = { version = "0.21", features = ["recovery"] }
-
 # Misc
-uuid = {version = "0.8.2", features = ["v4", "serde"]}
-chrono = {version = "0.4.22", features = ["serde"]}
+uuid = { version = "0.8.2", features = ["v4", "serde"] }
+chrono = { version = "0.4.22", features = ["serde"] }
 parking_lot = "0.12.1"
 num-traits = "0.2.15"
-dotenv = "0.15.0"

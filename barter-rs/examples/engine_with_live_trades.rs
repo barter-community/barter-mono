@@ -2,10 +2,6 @@ use barter::{
     data::live,
     engine::{trader::Trader, Engine},
     event::{Event, EventTx},
-    execution::{
-        simulated::{Config as ExecutionConfig, SimulatedExecution},
-        Fees,
-    },
     portfolio::{
         allocator::DefaultAllocator, portfolio::MetaPortfolio,
         repository::in_memory::InMemoryRepository, risk::DefaultRisk,
@@ -21,6 +17,12 @@ use barter_data::{
     exchange::{binance::spot::BinanceSpot, ExchangeId},
     streams::Streams,
     subscription::trade::PublicTrades,
+};
+
+use barter_execution::{
+    fill::Fees,
+    simulated::execution::{SimulatedExecution, SimulationConfig},
+    ExecutionClient,
 };
 use barter_integration::model::{instrument::kind::InstrumentKind, Market};
 use parking_lot::Mutex;
@@ -80,13 +82,20 @@ async fn main() {
             .portfolio(Arc::clone(&portfolio))
             .data(live::MarketFeed::new(stream_market_event_trades().await))
             .strategy(RSIStrategy::new(StrategyConfig { rsi_period: 14 }))
-            .execution(SimulatedExecution::new(ExecutionConfig {
-                simulated_fees_pct: Fees {
-                    exchange: 0.1,
-                    slippage: 0.05,
-                    network: 0.0,
-                },
-            }))
+            .execution(
+                SimulatedExecution::init(
+                    SimulationConfig {
+                        simulated_fees_pct: Fees {
+                            exchange: 0.1,
+                            slippage: 0.05,
+                            network: 0.0,
+                        },
+                        request_tx: mpsc::unbounded_channel().0,
+                    },
+                    mpsc::unbounded_channel().0,
+                )
+                .await,
+            )
             .build()
             .expect("failed to build trader"),
     );
