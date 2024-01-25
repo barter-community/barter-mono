@@ -8,11 +8,11 @@ pub struct Order {
     pub signature: String,
     pub input: Input,
     #[serde(rename = "settledAmounts")]
-    pub settled_amounts: Vec<SettledAmount>,
+    pub settled_amounts: Option<Vec<SettledAmount>>,
     #[serde(rename = "orderStatus")]
     pub order_status: String,
     #[serde(rename = "txHash")]
-    pub tx_hash: String,
+    pub tx_hash: Option<String>,
     #[serde(rename = "createdAt")]
     pub created_at: u64,
     #[serde(rename = "chainId")]
