@@ -5,6 +5,7 @@ use crate::{
 };
 use bytes::Bytes;
 use chrono::Utc;
+use std::fmt::Debug;
 use tokio::sync::mpsc;
 use tracing::warn;
 
@@ -50,6 +51,7 @@ where
     ) -> Result<Request::Response, Parser::OutputError>
     where
         Request: RestRequest,
+        <Request as RestRequest>::Response: Debug,
     {
         // Use provided Request to construct a signed reqwest::Request
         let request = self.build(request)?;

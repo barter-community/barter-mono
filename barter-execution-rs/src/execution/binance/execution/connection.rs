@@ -12,19 +12,21 @@ use barter_integration::{
     protocol::http::{private::Signer, rest::RestRequest, HttpParser},
 };
 use chrono::{DateTime, Utc};
+use hmac::digest::typenum::uint;
 use reqwest::{RequestBuilder, StatusCode};
 use serde::Deserialize;
 use thiserror::Error;
 
+#[derive(Debug)]
 pub struct BinanceSigner {
     pub api_key: String,
+    pub timestamp_delta: i64,
 }
 
+#[derive(Debug)]
 pub struct BinanceSignConfig<'a> {
     api_key: &'a str,
-    time: DateTime<Utc>,
-    method: reqwest::Method,
-    path: &'static str,
+    query_string: String,
 }
 
 impl Signer for BinanceSigner {
@@ -33,23 +35,32 @@ impl Signer for BinanceSigner {
     fn config<'a, Request>(
         &'a self,
         _: Request,
-        _: &RequestBuilder,
-    ) -> Result<Self::Config<'a>, SocketError>
+        mut builder: RequestBuilder,
+    ) -> Result<(Self::Config<'a>, RequestBuilder), SocketError>
     where
         Request: RestRequest,
     {
-        Ok(BinanceSignConfig {
-            api_key: self.api_key.as_str(),
-            time: Utc::now(),
-            method: Request::method(),
-            path: Request::path(),
-        })
+        let timestamp = (Utc::now().timestamp_millis() - self.timestamp_delta) as u128;
+        builder = builder.query(&[("timestamp", format!("{}", timestamp).as_str())]);
+        let (client, request) = builder.build_split();
+        if let Err(e) = request {
+            return Err(SocketError::from(e));
+        }
+        let request = request.unwrap();
+        let query_string = (&request).url().query().unwrap_or("").to_string();
+        let builder = RequestBuilder::from_parts(client, request);
+
+        Ok((
+            BinanceSignConfig {
+                api_key: self.api_key.as_str(),
+                query_string,
+            },
+            builder,
+        ))
     }
 
     fn bytes_to_sign<'a>(config: &Self::Config<'a>) -> Bytes {
-        Bytes::copy_from_slice(
-            format!("{}{}{}", config.time, config.method, config.path).as_bytes(),
-        )
+        Bytes::copy_from_slice(format!("{}", config.query_string).as_bytes())
     }
 
     fn build_signed_request<'a>(
@@ -57,16 +68,16 @@ impl Signer for BinanceSigner {
         builder: RequestBuilder,
         signature: String,
     ) -> Result<reqwest::Request, SocketError> {
-        // Add Ftx required Headers & build reqwest::Request
+        // Add Binance required Headers & build reqwest::Request
         builder
-            .header("FTX-KEY", config.api_key)
-            .header("FTX-TS", &config.time.timestamp_millis().to_string())
-            .header("FTX-SIGN", &signature)
+            .header("X-MBX-APIKEY", config.api_key)
+            .query(&[("signature", &signature)])
             .build()
             .map_err(SocketError::from)
     }
 }
 
+#[derive(Debug, Clone, Copy)]
 pub struct BinanceParser;
 
 impl HttpParser for BinanceParser {
@@ -96,6 +107,7 @@ pub enum ExecutionError {
     Socket(#[from] SocketError),
 }
 
+#[derive(Debug, Clone, Copy)]
 pub struct FetchBalancesRequest;
 
 impl RestRequest for FetchBalancesRequest {
@@ -104,7 +116,7 @@ impl RestRequest for FetchBalancesRequest {
     type Body = (); // FetchBalances does not require any Body
 
     fn path() -> &'static str {
-        "/api/wallet/balances"
+        "/api/v3/account"
     }
 
     fn method() -> reqwest::Method {
@@ -116,17 +128,26 @@ impl RestRequest for FetchBalancesRequest {
     }
 }
 
-#[derive(Deserialize)]
-#[allow(dead_code)]
+#[derive(Debug, Deserialize)]
+#[allow(dead_code, non_snake_case)]
 pub struct FetchBalancesResponse {
-    success: bool,
-    result: Vec<FtxBalance>,
+    #[serde(rename = "makerCommission")]
+    maker_commision: usize,
+    #[serde(rename = "takerCommission")]
+    taker_commission: usize,
+    #[serde(rename = "buyerCommission")]
+    buyer_commission: usize,
+    #[serde(rename = "sellerCommission")]
+    seller_commission: usize,
+    balances: Vec<BinanceBalance>,
 }
 
-#[derive(Deserialize)]
+#[derive(Debug, Deserialize)]
 #[allow(dead_code)]
-struct FtxBalance {
-    #[serde(rename = "coin")]
-    symbol: Symbol,
-    total: f64,
+struct BinanceBalance {
+    asset: Symbol,
+    #[serde(deserialize_with = "barter_integration::de::de_str")]
+    free: f64,
+    #[serde(deserialize_with = "barter_integration::de::de_str")]
+    locked: f64,
 }

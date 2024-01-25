@@ -37,8 +37,8 @@ pub trait Signer {
     fn config<'a, Request>(
         &'a self,
         request: Request,
-        builder: &reqwest::RequestBuilder,
-    ) -> Result<Self::Config<'a>, SocketError>
+        builder: reqwest::RequestBuilder,
+    ) -> Result<(Self::Config<'a>, reqwest::RequestBuilder), SocketError>
     where
         Request: RestRequest;
 
@@ -102,7 +102,7 @@ where
         Request: RestRequest,
     {
         // Build configuration required for generating signed requests
-        let config = self.signer.config(request, &builder)?;
+        let (config, builder) = self.signer.config(request, builder)?;
 
         // Generate bytes data used to update Mac state
         let bytes_to_sign = Sig::bytes_to_sign(&config);

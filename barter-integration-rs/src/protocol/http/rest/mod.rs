@@ -23,6 +23,11 @@ pub trait RestRequest {
     /// Additional [`Url`](url::Url) path to the resource.
     fn path() -> &'static str;
 
+    /// Additional [`Url`](url::Url) path to the resource.
+    fn url() -> Option<reqwest::Url> {
+        None
+    }
+
     /// Http [`reqwest::Method`] of this request.
     fn method() -> reqwest::Method;
 

@@ -1,3 +1,5 @@
+use std::fmt::Debug;
+
 use self::rest::RestRequest;
 use crate::error::SocketError;
 use reqwest::StatusCode;
@@ -52,12 +54,18 @@ pub trait HttpParser {
         payload: &[u8],
     ) -> Result<Response, Self::OutputError>
     where
-        Response: DeserializeOwned,
+        Response: DeserializeOwned + Debug,
     {
         // Attempt to deserialise reqwest::Response bytes into Ok(Response)
         let parse_ok_error = match serde_json::from_slice::<Response>(payload) {
-            Ok(response) => return Ok(response),
-            Err(serde_error) => serde_error,
+            Ok(response) => {
+                println!("{:?}", response);
+                return Ok(response);
+            }
+            Err(serde_error) => {
+                print!("{:?}", serde_error);
+                serde_error
+            }
         };
 
         // Attempt to deserialise API Error if Ok(Response) deserialisation failed

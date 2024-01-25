@@ -48,3 +48,4 @@ ta = "0.5.0"
 # Misc
 chrono = { version = "0.4.21", features = ["serde"] }
 parking_lot = "0.12.1"
+dotenv = "0.15.0"

@@ -34,17 +34,20 @@ impl Signer for FtxSigner {
     fn config<'a, Request>(
         &'a self,
         _: Request,
-        _: &RequestBuilder,
-    ) -> Result<Self::Config<'a>, SocketError>
+        builder: RequestBuilder,
+    ) -> Result<(Self::Config<'a>, RequestBuilder), SocketError>
     where
         Request: RestRequest,
     {
-        Ok(FtxSignConfig {
-            api_key: self.api_key.as_str(),
-            time: Utc::now(),
-            method: Request::method(),
-            path: Request::path(),
-        })
+        Ok((
+            FtxSignConfig {
+                api_key: self.api_key.as_str(),
+                time: Utc::now(),
+                method: Request::method(),
+                path: Request::path(),
+            },
+            builder,
+        ))
     }
 
     fn bytes_to_sign<'a>(config: &Self::Config<'a>) -> Bytes {
