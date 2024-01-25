@@ -26,6 +26,9 @@ pub mod liquidation;
 /// Public trade [`SubKind`] and the associated Barter output data model.
 pub mod trade;
 
+/// Open Orders  [`SubKind`] and the associated Barter output data model.
+pub mod open_order;
+
 /// Defines the type of a [`Subscription`], and the output [`Self::Event`] that it yields.
 pub trait SubKind
 where
