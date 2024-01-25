@@ -1,16 +1,3 @@
-use crate::{Cancelled, ExecutionError, Open, Order, RequestCancel, RequestOpen, SymbolBalance};
-use barter_data::subscription::trade::PublicTrade;
-use barter_integration::model::instrument::Instrument;
-use tokio::sync::oneshot;
-
-/// Simulated Exchange using public trade `Streams` to model available market liquidity. Liquidity
-/// is then used to match to open client orders.
-pub mod exchange;
-
-/// Simulated [`ExecutionClient`](crate::ExecutionClient) implementation that integrates with the
-/// Barter [`SimulatedExchange`](exchange::SimulatedExchange).
-pub mod execution;
-
 /// Events used to communicate with the Barter [`SimulatedExchange`](exchange::SimulatedExchange).
 ///
 /// Two main types of [`SimulatedEvent`]:

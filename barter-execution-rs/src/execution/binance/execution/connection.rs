@@ -1,35 +1,34 @@
+// pub struct RestHeadersBinance {
+//     pub api_key: String,
+//     pub is_usd_m_futures: bool,
+// }
+
+use bytes::Bytes;
+
 use barter_integration::{
     error::SocketError,
     metric::Tag,
     model::instrument::symbol::Symbol,
-    protocol::http::{
-        private::{encoder::HexEncoder, RequestSigner, Signer},
-        rest::{client::RestClient, RestRequest},
-        HttpParser,
-    },
+    protocol::http::{private::Signer, rest::RestRequest, HttpParser},
 };
-use bytes::Bytes;
 use chrono::{DateTime, Utc};
-use hmac::{digest::KeyInit, Hmac};
 use reqwest::{RequestBuilder, StatusCode};
 use serde::Deserialize;
 use thiserror::Error;
-use tokio::sync::mpsc;
 
-struct FtxSigner {
-    api_key: String,
+pub struct BinanceSigner {
+    pub api_key: String,
 }
 
-// Configuration required to sign every Ftx `RestRequest`
-struct FtxSignConfig<'a> {
+pub struct BinanceSignConfig<'a> {
     api_key: &'a str,
     time: DateTime<Utc>,
     method: reqwest::Method,
     path: &'static str,
 }
 
-impl Signer for FtxSigner {
-    type Config<'a> = FtxSignConfig<'a> where Self: 'a;
+impl Signer for BinanceSigner {
+    type Config<'a> = BinanceSignConfig<'a> where Self: 'a;
 
     fn config<'a, Request>(
         &'a self,
@@ -39,7 +38,7 @@ impl Signer for FtxSigner {
     where
         Request: RestRequest,
     {
-        Ok(FtxSignConfig {
+        Ok(BinanceSignConfig {
             api_key: self.api_key.as_str(),
             time: Utc::now(),
             method: Request::method(),
@@ -68,9 +67,9 @@ impl Signer for FtxSigner {
     }
 }
 
-struct FtxParser;
+pub struct BinanceParser;
 
-impl HttpParser for FtxParser {
+impl HttpParser for BinanceParser {
     type ApiError = serde_json::Value;
     type OutputError = ExecutionError;
 
@@ -89,7 +88,7 @@ impl HttpParser for FtxParser {
 }
 
 #[derive(Debug, Error)]
-enum ExecutionError {
+pub enum ExecutionError {
     #[error("request authorisation invalid: {0}")]
     Unauthorised(String),
 
@@ -130,30 +129,4 @@ struct FtxBalance {
     #[serde(rename = "coin")]
     symbol: Symbol,
     total: f64,
-}
-
-/// See Barter-Execution for a comprehensive real-life example, as well as code you can use out of the
-/// box to execute trades on many exchanges.
-#[tokio::main]
-async fn main() {
-    // Construct Metric channel to send Http execution metrics over
-    let (http_metric_tx, _http_metric_rx) = mpsc::unbounded_channel();
-
-    // HMAC-SHA256 encoded account API secret used for signing private http requests
-    let mac: Hmac<sha2::Sha256> = Hmac::new_from_slice("api_secret".as_bytes()).unwrap();
-
-    // Build Ftx configured RequestSigner for signing http requests with hex encoding
-    let request_signer = RequestSigner::new(
-        FtxSigner {
-            api_key: "api_key".to_string(),
-        },
-        mac,
-        HexEncoder,
-    );
-
-    // Build RestClient with Ftx configuration
-    let rest_client = RestClient::new("https://ftx.com", http_metric_tx, request_signer, FtxParser);
-
-    // Fetch Result<FetchBalancesResponse, ExecutionError>
-    let _response = rest_client.execute(FetchBalancesRequest).await;
 }
