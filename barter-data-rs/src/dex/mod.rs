@@ -2,7 +2,6 @@ use core::fmt;
 
 pub mod uniswapx;
 
-
 /// DEX Errors
 #[derive(Debug)]
 pub enum DexError {

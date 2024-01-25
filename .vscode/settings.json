@@ -1,0 +1,10 @@
+{
+  "rust-analyzer.linkedProjects": [
+    "./barter-data-rs/Cargo.toml",
+    "./barter-data-rs/Cargo.toml",
+    "./barter-data-rs/Cargo.toml"
+  ],
+  "rust-analyzer.showUnlinkedFileNotification": false,
+  "editor.detectIndentation": false,
+  "editor.tabSize": 2
+}

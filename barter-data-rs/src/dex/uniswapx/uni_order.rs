@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct Order {
+pub struct UniOrder {
     pub outputs: Vec<Output>,
     #[serde(rename = "encodedOrder")]
     pub encoded_order: String,
@@ -25,36 +25,36 @@ pub struct Order {
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Output {
-    recipient: String,
+    pub recipient: String,
     #[serde(rename = "startAmount")]
-    start_amount: String,
+    pub start_amount: String,
     #[serde(rename = "endAmount")]
-    end_amount: String,
-    token: String,
+    pub end_amount: String,
+    pub token: String,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Input {
     #[serde(rename = "endAmount")]
-    end_amount: String,
-    token: String,
+    pub end_amount: String,
+    pub token: String,
     #[serde(rename = "startAmount")]
-    start_amount: String,
+    pub start_amount: String,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct SettledAmount {
     #[serde(rename = "tokenOut")]
-    token_out: String,
+    pub token_out: String,
     #[serde(rename = "amountIn")]
-    amount_in: String,
+    pub amount_in: String,
     #[serde(rename = "amountOut")]
-    amount_out: String,
+    pub amount_out: String,
     #[serde(rename = "tokenIn")]
-    token_in: String,
+    pub token_in: String,
 }
 
 #[derive(Deserialize, Debug)]
 pub struct Response {
-  pub orders: Vec<Order>,
+  pub orders: Vec<UniOrder>,
 }

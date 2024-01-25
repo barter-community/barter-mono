@@ -1,10 +1,7 @@
 use crate::{
     error::DataError,
     subscription::{
-        book::{OrderBook, OrderBookL1},
-        candle::Candle,
-        liquidation::Liquidation,
-        trade::PublicTrade,
+        book::{OrderBook, OrderBookL1}, candle::Candle, intent_order::IntentOrder, liquidation::Liquidation, trade::PublicTrade
     },
 };
 use barter_integration::model::{instrument::Instrument, Exchange};
@@ -60,6 +57,7 @@ pub enum DataKind {
     OrderBook(OrderBook),
     Candle(Candle),
     Liquidation(Liquidation),
+    IntentOrder(IntentOrder),
 }
 
 impl From<MarketEvent<PublicTrade>> for MarketEvent<DataKind> {

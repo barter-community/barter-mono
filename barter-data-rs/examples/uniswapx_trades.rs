@@ -5,9 +5,6 @@ use tokio::time::{sleep, Duration};
 
 #[tokio::main]
 async fn main() {
-
-
-
     let uni = UniswapX::new();
     let mut rx = uni.start();
 
@@ -15,10 +12,12 @@ async fn main() {
       let result = rx.recv().await;
       match result {
         Some(orders) => {
-          println!("Main - New Orders: {:?}", orders);
+          for order in orders {
+            println!("Main - New Order: {:?}", order.id);
+          }
         },
         None => {
-          println!("No orders");
+          println!("No orders - something has failed");
         }
       }
     }
