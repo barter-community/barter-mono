@@ -2,11 +2,11 @@ use super::{error::EngineError, Command};
 use crate::{
     data::{Feed, MarketGenerator},
     event::{Event, MessageTransmitter},
-    execution::ExecutionClient,
     portfolio::{FillUpdater, MarketUpdater, OrderGenerator},
     strategy::{SignalForceExit, SignalGenerator},
 };
 use barter_data::event::{DataKind, MarketEvent};
+use barter_execution::ExecutionClient;
 use barter_integration::model::Market;
 use parking_lot::Mutex;
 use serde::Serialize;

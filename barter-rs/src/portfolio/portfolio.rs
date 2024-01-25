@@ -7,16 +7,18 @@ use super::{
     },
     repository::{error::RepositoryError, BalanceHandler, PositionHandler, StatisticHandler},
     risk::OrderEvaluator,
-    Balance, FillUpdater, MarketUpdater, OrderEvent, OrderGenerator, OrderType,
+    Balance, FillUpdater, MarketUpdater, OrderEvent, OrderGenerator,
 };
 use crate::{
-    data::MarketMeta,
     event::Event,
-    execution::FillEvent,
     statistic::summary::{Initialiser, PositionSummariser},
-    strategy::{Decision, Signal, SignalForceExit, SignalStrength},
+    strategy::{Signal, SignalForceExit, SignalStrength},
 };
 use barter_data::event::{DataKind, MarketEvent};
+use barter_execution::{
+    fill::{Decision, FillEvent, MarketMeta},
+    model::order_event::OrderType,
+};
 use barter_integration::model::{Market, MarketId, Side};
 use chrono::Utc;
 use serde::Serialize;
@@ -552,7 +554,6 @@ pub mod tests {
     use super::*;
 
     use crate::{
-        execution::Fees,
         portfolio::{
             allocator::DefaultAllocator, position::PositionBuilder,
             repository::error::RepositoryError, risk::DefaultRisk,
@@ -561,6 +562,7 @@ pub mod tests {
         strategy::SignalForceExit,
         test_util::{fill_event, market_event_trade, position, signal},
     };
+    use barter_execution::fill::Fees;
     use barter_integration::model::{
         instrument::{kind::InstrumentKind, Instrument},
         Exchange, Side,

@@ -1,6 +1,6 @@
 use super::{Decision, Signal, SignalGenerator, SignalStrength};
-use crate::data::MarketMeta;
 use barter_data::event::{DataKind, MarketEvent};
+use barter_execution::fill::MarketMeta;
 use chrono::Utc;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;

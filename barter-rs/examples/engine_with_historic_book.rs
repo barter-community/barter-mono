@@ -2,10 +2,6 @@ use barter::{
     data::live,
     engine::{trader::Trader, Engine},
     event::{Event, EventTx},
-    execution::{
-        simulated::{Config as ExecutionConfig, SimulatedExecution},
-        Fees,
-    },
     portfolio::{
         allocator::DefaultAllocator, portfolio::MetaPortfolio,
         repository::in_memory::InMemoryRepository, risk::DefaultRisk,
@@ -33,6 +29,11 @@ use barter_data::{
     subscription::{book::InnerOrderBook, Map},
     transformer::book::{InstrumentOrderBook, MultiBookTransformer, OrderBookUpdater},
 };
+use barter_execution::{
+    fill::Fees,
+    simulated::execution::{SimulatedExecution, SimulationConfig},
+    ExecutionClient,
+};
 use barter_integration::{
     model::{
         instrument::{kind::InstrumentKind, Instrument},
@@ -55,8 +56,8 @@ use futures::stream::{self, StreamExt};
 
 use uuid::Uuid;
 
-const ORDER_BOOK_DELTAS: &str = "data/binance_l2_2024_01_14.dat";
-const SNAPSHOT: &str = "data/snapshot_@depth@100ms|ETHUSDT_2024-01-13.json";
+const ORDER_BOOK_DELTAS: &str = "data/binance_l2_2024_01_18_20.dat";
+const SNAPSHOT: &str = "data/snapshot_@depth@100ms|ETHUSDT_2024-01-19.json";
 
 #[tokio::main]
 async fn main() {
@@ -113,13 +114,20 @@ async fn main() {
             //  thi is actually a feed from file
             .data(live::MarketFeed::new(rx))
             .strategy(GLFTStrategy::new(StrategyConfig {}))
-            .execution(SimulatedExecution::new(ExecutionConfig {
-                simulated_fees_pct: Fees {
-                    exchange: 0.1,
-                    slippage: 0.05,
-                    network: 0.0,
-                },
-            }))
+            .execution(
+                SimulatedExecution::init(
+                    SimulationConfig {
+                        simulated_fees_pct: Fees {
+                            exchange: 0.1,
+                            slippage: 0.05,
+                            network: 0.0,
+                        },
+                        request_tx: mpsc::unbounded_channel().0,
+                    },
+                    mpsc::unbounded_channel().0,
+                )
+                .await,
+            )
             .build()
             .expect("failed to build trader"),
     );

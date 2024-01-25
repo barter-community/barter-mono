@@ -17,6 +17,7 @@ categories = ["accessibility", "simulation"]
 # Barter Ecosystem
 barter-data = { version = "0.7.0", path = "../barter-data-rs" }
 barter-integration = { version = "0.5.3", path = "../barter-integration-rs" }
+barter-execution = { version = "0.3.0", path = "../barter-execution-rs" }
 
 # Logging
 tracing = "0.1.36"

@@ -1,7 +1,5 @@
-use crate::{
-    portfolio::{position::Position, OrderEvent},
-    strategy::{Decision, SignalStrength},
-};
+use crate::{portfolio::position::Position, strategy::SignalStrength};
+use barter_execution::{fill::Decision, model::order_event::OrderEvent};
 use serde::{Deserialize, Serialize};
 
 /// Allocates an appropriate [`OrderEvent`] quantity.

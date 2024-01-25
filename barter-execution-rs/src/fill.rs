@@ -1,19 +1,63 @@
-use crate::{data::MarketMeta, portfolio::OrderEvent, strategy::Decision};
+use crate::error::ExecutionError;
 use barter_integration::model::{instrument::Instrument, Exchange};
 use chrono::{DateTime, Utc};
-use error::ExecutionError;
 use serde::{Deserialize, Serialize};
 
-/// Barter execution module specific errors.
-pub mod error;
+/// Metadata detailing the [`Candle`](barter_data::subscription::candle::Candle) or
+/// [`Trade`](barter_data::subscription::trade::PublicTrade) close price & it's associated
+/// timestamp. Used to propagate key market information in downstream Events.
+#[derive(Copy, Clone, PartialEq, PartialOrd, Debug, Deserialize, Serialize)]
+pub struct MarketMeta {
+    /// Close value from the source market event.
+    pub close: f64,
+    /// Exchange timestamp from the source market event.
+    pub time: DateTime<Utc>,
+}
 
-/// Handlers for simulated and live [`OrderEvent`] execution.
-pub mod simulated;
+impl Default for MarketMeta {
+    fn default() -> Self {
+        Self {
+            close: 100.0,
+            time: Utc::now(),
+        }
+    }
+}
 
-/// Generates a result [`FillEvent`] by executing an [`OrderEvent`].
-pub trait ExecutionClient {
-    /// Return a [`FillEvent`] from executing the input [`OrderEvent`].
-    fn generate_fill(&self, order: &OrderEvent) -> Result<FillEvent, ExecutionError>;
+/// Describes the type of advisory signal the strategy is endorsing.
+#[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash, Debug, Deserialize, Serialize)]
+pub enum Decision {
+    Long,
+    CloseLong,
+    Short,
+    CloseShort,
+}
+
+impl Default for Decision {
+    fn default() -> Self {
+        Self::Long
+    }
+}
+
+impl Decision {
+    /// Determines if a [`Decision`] is Long.
+    pub fn is_long(&self) -> bool {
+        matches!(self, Decision::Long)
+    }
+
+    /// Determines if a [`Decision`] is Short.
+    pub fn is_short(&self) -> bool {
+        matches!(self, Decision::Short)
+    }
+
+    /// Determines if a [`Decision`] is an entry (long or short).
+    pub fn is_entry(&self) -> bool {
+        matches!(self, Decision::Short | Decision::Long)
+    }
+
+    /// Determines if a [`Decision`] is an exit (close_long or close_short).
+    pub fn is_exit(&self) -> bool {
+        matches!(self, Decision::CloseLong | Decision::CloseShort)
+    }
 }
 
 /// Fills are journals of work done by an Execution handler. These are sent back to the portfolio
