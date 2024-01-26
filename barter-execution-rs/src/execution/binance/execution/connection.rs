@@ -1,20 +1,11 @@
-// pub struct RestHeadersBinance {
-//     pub api_key: String,
-//     pub is_usd_m_futures: bool,
-// }
-
 use bytes::Bytes;
 
 use barter_integration::{
     error::SocketError,
-    metric::Tag,
-    model::instrument::symbol::Symbol,
     protocol::http::{private::Signer, rest::RestRequest, HttpParser},
 };
-use chrono::{DateTime, Utc};
-use hmac::digest::typenum::uint;
+use chrono::Utc;
 use reqwest::{RequestBuilder, StatusCode};
-use serde::Deserialize;
 use thiserror::Error;
 
 #[derive(Debug)]
@@ -34,7 +25,7 @@ impl Signer for BinanceSigner {
 
     fn config<'a, Request>(
         &'a self,
-        _: Request,
+        _: &Request,
         mut builder: RequestBuilder,
     ) -> Result<(Self::Config<'a>, RequestBuilder), SocketError>
     where
@@ -105,49 +96,4 @@ pub enum ExecutionError {
 
     #[error("SocketError: {0}")]
     Socket(#[from] SocketError),
-}
-
-#[derive(Debug, Clone, Copy)]
-pub struct FetchBalancesRequest;
-
-impl RestRequest for FetchBalancesRequest {
-    type Response = FetchBalancesResponse; // Define Response type
-    type QueryParams = (); // FetchBalances does not require any QueryParams
-    type Body = (); // FetchBalances does not require any Body
-
-    fn path() -> &'static str {
-        "/api/v3/account"
-    }
-
-    fn method() -> reqwest::Method {
-        reqwest::Method::GET
-    }
-
-    fn metric_tag() -> Tag {
-        Tag::new("method", "fetch_balances")
-    }
-}
-
-#[derive(Debug, Deserialize)]
-#[allow(dead_code, non_snake_case)]
-pub struct FetchBalancesResponse {
-    #[serde(rename = "makerCommission")]
-    maker_commision: usize,
-    #[serde(rename = "takerCommission")]
-    taker_commission: usize,
-    #[serde(rename = "buyerCommission")]
-    buyer_commission: usize,
-    #[serde(rename = "sellerCommission")]
-    seller_commission: usize,
-    balances: Vec<BinanceBalance>,
-}
-
-#[derive(Debug, Deserialize)]
-#[allow(dead_code)]
-struct BinanceBalance {
-    asset: Symbol,
-    #[serde(deserialize_with = "barter_integration::de::de_str")]
-    free: f64,
-    #[serde(deserialize_with = "barter_integration::de::de_str")]
-    locked: f64,
 }

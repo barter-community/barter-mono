@@ -33,7 +33,7 @@ impl Signer for FtxSigner {
 
     fn config<'a, Request>(
         &'a self,
-        _: Request,
+        request: &Request,
         builder: RequestBuilder,
     ) -> Result<(Self::Config<'a>, RequestBuilder), SocketError>
     where
@@ -43,8 +43,8 @@ impl Signer for FtxSigner {
             FtxSignConfig {
                 api_key: self.api_key.as_str(),
                 time: Utc::now(),
-                method: Request::method(),
-                path: Request::path(),
+                method: request.method(),
+                path: request.path(),
             },
             builder,
         ))
@@ -108,15 +108,15 @@ impl RestRequest for FetchBalancesRequest {
     type QueryParams = (); // FetchBalances does not require any QueryParams
     type Body = (); // FetchBalances does not require any Body
 
-    fn path() -> &'static str {
+    fn path(&self) -> &'static str {
         "/api/wallet/balances"
     }
 
-    fn method() -> reqwest::Method {
+    fn method(&self) -> reqwest::Method {
         reqwest::Method::GET
     }
 
-    fn metric_tag() -> Tag {
+    fn metric_tag(&self) -> Tag {
         Tag::new("method", "fetch_balances")
     }
 }

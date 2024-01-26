@@ -33,7 +33,7 @@ pub trait BuildStrategy {
     /// `reqwest` headers.
     fn build<Request>(
         &self,
-        request: Request,
+        request: &Request,
         builder: reqwest::RequestBuilder,
     ) -> Result<reqwest::Request, SocketError>
     where
@@ -59,13 +59,9 @@ pub trait HttpParser {
         // Attempt to deserialise reqwest::Response bytes into Ok(Response)
         let parse_ok_error = match serde_json::from_slice::<Response>(payload) {
             Ok(response) => {
-                println!("{:?}", response);
                 return Ok(response);
             }
-            Err(serde_error) => {
-                print!("{:?}", serde_error);
-                serde_error
-            }
+            Err(serde_error) => serde_error,
         };
 
         // Attempt to deserialise API Error if Ok(Response) deserialisation failed

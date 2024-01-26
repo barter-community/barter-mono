@@ -16,6 +16,7 @@ use crate::{
 
 use super::BinanceEvent;
 pub mod connection;
+pub mod requests;
 
 /// Simulated [`ExecutionClient`] implementation that integrates with the Barter
 /// [`SimulatedExchange`](super::exchange::SimulatedExchange).

@@ -36,7 +36,7 @@ pub trait Signer {
     /// ```
     fn config<'a, Request>(
         &'a self,
-        request: Request,
+        request: &Request,
         builder: reqwest::RequestBuilder,
     ) -> Result<(Self::Config<'a>, reqwest::RequestBuilder), SocketError>
     where
@@ -95,7 +95,7 @@ where
 {
     fn build<Request>(
         &self,
-        request: Request,
+        request: &Request,
         builder: reqwest::RequestBuilder,
     ) -> Result<reqwest::Request, SocketError>
     where

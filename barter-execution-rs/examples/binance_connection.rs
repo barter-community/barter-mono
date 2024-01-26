@@ -1,5 +1,6 @@
-use barter_execution::execution::binance::execution::connection::{
-    BinanceParser, BinanceSigner, FetchBalancesRequest,
+use barter_execution::execution::binance::execution::{
+    connection::{BinanceParser, BinanceSigner},
+    requests::{BALANCES_REQUEST, FUT_BALANCES},
 };
 use barter_integration::protocol::http::{
     private::{encoder::HexEncoder, RequestSigner},
@@ -35,13 +36,15 @@ async fn main() {
 
     // Build RestClient with Binance configuration
     let rest_client = RestClient::new(
-        "https://api.binance.com",
+        // "https://api.binance.com",
+        "https://fapi.binance.com",
         http_metric_tx,
         request_signer,
         BinanceParser,
     );
 
-    // Fetch Result<FetchBalancesResponse, ExecutionError>
-    let _response = rest_client.execute(FetchBalancesRequest).await;
-    // println!("{:?}", _response);
+    match rest_client.execute(FUT_BALANCES).await {
+        Ok(response) => println!("{:#?}", response),
+        Err(e) => println!("{:?}", e),
+    }
 }

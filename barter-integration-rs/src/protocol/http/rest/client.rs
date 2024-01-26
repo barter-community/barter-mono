@@ -53,29 +53,33 @@ where
         Request: RestRequest,
         <Request as RestRequest>::Response: Debug,
     {
+        let metric_tag = request.metric_tag();
+
         // Use provided Request to construct a signed reqwest::Request
-        let request = self.build(request)?;
+        let rest_request = self.build(&request)?;
 
         // Measure request execution
-        let (status, payload) = self.measured_execution::<Request>(request).await?;
+        let (status, payload) = self
+            .measured_execution::<Request>(rest_request, request)
+            .await?;
 
         // Attempt to parse API Success or Error response
         self.parser.parse::<Request::Response>(status, &payload)
     }
 
     /// Use the provided [`RestRequest`] to construct a signed Http [`reqwest::Request`].
-    pub fn build<Request>(&self, request: Request) -> Result<reqwest::Request, SocketError>
+    pub fn build<Request>(&self, request: &Request) -> Result<reqwest::Request, SocketError>
     where
         Request: RestRequest,
     {
         // Construct url
-        let url = self.base_url.to_string() + Request::path();
+        let url = self.base_url.to_string() + request.path();
 
         // Construct RequestBuilder with method & url
         let mut builder = self
             .http_client
-            .request(Request::method(), url)
-            .timeout(Request::timeout());
+            .request(request.method(), url)
+            .timeout(request.timeout());
 
         // Add optional query parameters
         if let Some(query_params) = request.query_params() {
@@ -97,14 +101,15 @@ where
     /// via the [`Metric`] transmitter.
     pub async fn measured_execution<Request>(
         &self,
-        request: reqwest::Request,
+        rest_request: reqwest::Request,
+        request: Request,
     ) -> Result<(reqwest::StatusCode, Bytes), SocketError>
     where
         Request: RestRequest,
     {
         // Measure the HTTP request round trip duration
         let start = std::time::Instant::now();
-        let response = self.http_client.execute(request).await?;
+        let response = self.http_client.execute(rest_request).await?;
         let duration = start.elapsed().as_millis() as u64;
 
         // Construct HTTP request duration Metric & send
@@ -112,8 +117,8 @@ where
             name: "http_request_duration",
             time: Utc::now().timestamp_millis() as u64,
             tags: vec![
-                Request::metric_tag(),
-                Tag::new("http_method", Request::method().as_str()),
+                request.metric_tag(),
+                Tag::new("http_method", request.method().as_str()),
                 Tag::new("status_code", response.status().as_str()),
                 Tag::new("base_url", self.base_url),
             ],
