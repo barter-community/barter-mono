@@ -100,6 +100,7 @@ enum ExecutionError {
     Socket(#[from] SocketError),
 }
 
+#[derive(Debug)]
 pub struct FetchBalancesRequest;
 
 impl RestRequest for FetchBalancesRequest {
@@ -120,14 +121,14 @@ impl RestRequest for FetchBalancesRequest {
     }
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Debug)]
 #[allow(dead_code)]
 pub struct FetchBalancesResponse {
     success: bool,
     result: Vec<FtxBalance>,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Debug)]
 #[allow(dead_code)]
 struct FtxBalance {
     #[serde(rename = "coin")]
