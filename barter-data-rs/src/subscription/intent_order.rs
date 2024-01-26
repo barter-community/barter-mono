@@ -12,8 +12,8 @@ impl SubKind for IntentOrders {
 
 #[derive(Clone, Copy, PartialEq, PartialOrd, Debug, Deserialize, Serialize)]
 pub enum IntentOrderUpdate {
-  Opened,
-  Closed,
+    Opened,
+    Closed,
 }
 
 #[derive(Clone, PartialEq, PartialOrd, Debug, Deserialize, Serialize)]
@@ -34,6 +34,3 @@ pub struct IntentOrder {
     pub signature: String,
     pub encoded_order: String,
 }
-
-
-

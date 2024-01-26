@@ -56,5 +56,5 @@ pub struct SettledAmount {
 
 #[derive(Deserialize, Debug)]
 pub struct Response {
-  pub orders: Vec<UniOrder>,
+    pub orders: Vec<UniOrder>,
 }

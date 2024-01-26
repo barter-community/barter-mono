@@ -1,7 +1,11 @@
 use crate::{
     error::DataError,
     subscription::{
-        book::{OrderBook, OrderBookL1}, candle::Candle, intent_order::IntentOrder, liquidation::Liquidation, trade::PublicTrade
+        book::{OrderBook, OrderBookL1},
+        candle::Candle,
+        intent_order::IntentOrder,
+        liquidation::Liquidation,
+        trade::PublicTrade,
     },
 };
 use barter_integration::model::{instrument::Instrument, Exchange};
