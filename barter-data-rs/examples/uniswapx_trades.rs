@@ -1,5 +1,5 @@
 use barter_data::{
-  dex::uniswapx::{UniswapX, get_open_orders}
+  dex::{tokens::TokenCache, uniswapx::{UniswapX, get_open_orders}}
 };
 use tokio::time::{sleep, Duration};
 

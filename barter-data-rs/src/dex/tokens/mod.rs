@@ -1,9 +1,9 @@
 use redis::{Commands, RedisError, Client};
 use core::fmt;
-use std::sync::{Arc, Mutex};
+use tokio::sync::Mutex;
 use lazy_static::lazy_static;
 use serde::{Deserialize, Serialize};
-
+use std::sync::Arc;
 use super::DexError;
 use ethers::{
   contract::{abigen, ContractError}, 
@@ -90,9 +90,33 @@ impl TokenCache {
   }
 
   pub async fn get_token_from_chain(&self, chain_id: &u64, address: &String) -> Result<Token, DexError> {
-      println!("get_token_from_chain");
+
+      // Special Cases
+      if address.to_lowercase() == "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee".to_lowercase() {
+        let token = Token {
+          addr: address.to_string(),
+          symbol: "ETH".to_string(),
+          decimals: 18,
+        };
+        return Ok(token)
+      } else if address.to_lowercase() == "0x0000000000000000000000000000000000000000" {
+        let token = Token {
+          addr: address.to_string(),
+          symbol: "ETH".to_string(),
+          decimals: 18,
+        };
+        return Ok(token)
+      } else if address.to_lowercase() == "0x0d88ed6e74bbfd96b831231638b66c05571e824f".to_lowercase() {
+        let token = Token {
+          addr: address.to_string(),
+          symbol: "AVT".to_string(),
+          decimals: 18,
+        };
+        return Ok(token)
+      }
+
       // Connect to the network
-      let provider = Provider::<Http>::try_from("https://rpc.ankr.com/eth")?;
+      let provider: Provider<Http> = Provider::<Http>::try_from("https://rpc.ankr.com/eth")?;
 
       // Create an instance of the ERC20 contract
       let addr: Address = match address.parse() {
@@ -103,13 +127,8 @@ impl TokenCache {
       let client = Arc::new(provider);
       let erc20 = IERC20::new(addr, client);
 
-      // Call the decimals function
       let decimals = erc20.decimals().call().await?;
-      println!("Decimals: {}", decimals);
-
-      // Call the symbol function
       let symbol = erc20.symbol().call().await?;
-      println!("Symbol: {}", symbol);
       let token = Token {
         addr: address.to_string(),
         symbol: symbol,
