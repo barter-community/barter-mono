@@ -47,20 +47,18 @@ where
     /// Execute the provided [`RestRequest`].
     pub async fn execute<Request>(
         &self,
-        request: Request,
+        request_input: Request,
     ) -> Result<Request::Response, Parser::OutputError>
     where
         Request: RestRequest,
         <Request as RestRequest>::Response: Debug,
     {
-        let metric_tag = request.metric_tag();
-
         // Use provided Request to construct a signed reqwest::Request
-        let rest_request = self.build(&request)?;
+        let request = self.build(&request_input)?;
 
         // Measure request execution
         let (status, payload) = self
-            .measured_execution::<Request>(rest_request, request)
+            .measured_execution::<Request>(request, request_input)
             .await?;
 
         // Attempt to parse API Success or Error response
@@ -101,15 +99,15 @@ where
     /// via the [`Metric`] transmitter.
     pub async fn measured_execution<Request>(
         &self,
-        rest_request: reqwest::Request,
-        request: Request,
+        request: reqwest::Request,
+        request_input: Request, //  this is the original request constructed by client
     ) -> Result<(reqwest::StatusCode, Bytes), SocketError>
     where
         Request: RestRequest,
     {
         // Measure the HTTP request round trip duration
         let start = std::time::Instant::now();
-        let response = self.http_client.execute(rest_request).await?;
+        let response = self.http_client.execute(request).await?;
         let duration = start.elapsed().as_millis() as u64;
 
         // Construct HTTP request duration Metric & send
@@ -117,8 +115,8 @@ where
             name: "http_request_duration",
             time: Utc::now().timestamp_millis() as u64,
             tags: vec![
-                request.metric_tag(),
-                Tag::new("http_method", request.method().as_str()),
+                request_input.metric_tag(),
+                Tag::new("http_method", request_input.method().as_str()),
                 Tag::new("status_code", response.status().as_str()),
                 Tag::new("base_url", self.base_url),
             ],
