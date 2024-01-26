@@ -13,6 +13,7 @@ pub enum InstrumentKind {
     Perpetual,
     Option(OptionContract),
     Erc20,
+    IntentOrder,
 }
 
 impl Default for InstrumentKind {
@@ -39,6 +40,7 @@ impl Display for InstrumentKind {
                     option.strike,
                 ),
                 InstrumentKind::Erc20 => "erc20".to_string(),
+                InstrumentKind::IntentOrder => "intent_order".to_string(),
             }
         )
     }

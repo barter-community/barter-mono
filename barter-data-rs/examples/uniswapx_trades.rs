@@ -7,7 +7,7 @@ use tokio::time::{sleep, Duration};
 #[tokio::main]
 async fn main() {
     let uni = UniswapX::new();
-    let mut rx = uni.start();
+    let mut rx = uni.select();
 
     loop {
         let result = rx.recv().await;

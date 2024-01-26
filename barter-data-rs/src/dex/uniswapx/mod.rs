@@ -1,4 +1,9 @@
+use crate::event::{DataKind, MarketEvent};
 use crate::subscription::intent_order::{IntentOrder, IntentOrderUpdate};
+use barter_integration::model::{
+    instrument::{kind::InstrumentKind, Instrument},
+    Exchange,
+};
 use eyre::Result;
 use reqwest;
 
@@ -155,7 +160,7 @@ impl UniswapX {
         ()
     }
 
-    pub fn start(&self) -> UnboundedReceiver<Vec<IntentOrder>> {
+    pub fn select(&self) -> UnboundedReceiver<MarketEvent<DataKind>> {
         let (tx, rx) = mpsc::unbounded_channel();
 
         tokio::spawn(async move {
@@ -176,7 +181,19 @@ impl UniswapX {
                             .await;
                             match result {
                                 Ok(intent_orders) => {
-                                    let _ = tx.send(intent_orders);
+                                    for order in &intent_orders {
+                                        let _ = tx.send(MarketEvent {
+                                            exchange_time: chrono::Utc::now(),
+                                            received_time: chrono::Utc::now(),
+                                            exchange: Exchange::from("IntentOrder"),
+                                            instrument: Instrument::new(
+                                                order.in_token.clone(), // Todo improve instrument to use correct quote token
+                                                order.out_token.clone(),
+                                                InstrumentKind::IntentOrder,
+                                            ),
+                                            kind: DataKind::IntentOrder(order.clone()),
+                                        });
+                                    }
                                 }
                                 Err(e) => {
                                     eprintln!(
