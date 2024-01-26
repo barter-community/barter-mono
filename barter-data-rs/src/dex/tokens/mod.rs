@@ -4,7 +4,6 @@ use ethers::{
     contract::{abigen, ContractError},
     core::types::Address,
     providers::{Http, Provider},
-    utils::hex::FromHexError,
 };
 use lazy_static::lazy_static;
 use redis::{Client, Commands, RedisError};
@@ -30,44 +29,11 @@ pub struct Token {
     pub symbol: String,
     pub decimals: u8,
 }
-impl fmt::Display for Token {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "Token {{ addr: {}, symbol: {}, decimals: {} }}",
-            self.addr, self.symbol, self.decimals
-        )
-    }
-}
 
 lazy_static! {
     static ref REDIS_CACHE: Mutex<TokenCache> = Mutex::new(TokenCache {
         client: Client::open("redis://127.0.0.1/").expect("Failed to create Redis client"),
     });
-}
-
-impl From<RedisError> for DexError {
-    fn from(err: RedisError) -> Self {
-        DexError::Error(err.to_string())
-    }
-}
-
-impl From<url::ParseError> for DexError {
-    fn from(err: url::ParseError) -> Self {
-        DexError::Error(err.to_string())
-    }
-}
-
-impl From<FromHexError> for DexError {
-    fn from(err: FromHexError) -> Self {
-        DexError::Error(err.to_string())
-    }
-}
-
-impl From<ContractError<Provider<Http>>> for DexError {
-    fn from(err: ContractError<Provider<Http>>) -> Self {
-        DexError::Error(err.to_string())
-    }
 }
 
 impl TokenCache {
@@ -125,7 +91,9 @@ impl TokenCache {
         }
 
         // Connect to the network
-        let provider: Provider<Http> = Provider::<Http>::try_from("https://rpc.ankr.com/eth")?;
+
+        let rpc_url = std::env::var("ETH_NODE_URL").expect("WSS_URL must be set.");
+        let provider: Provider<Http> = Provider::<Http>::try_from(rpc_url)?;
 
         // Create an instance of the ERC20 contract
         let addr: Address = match address.parse() {

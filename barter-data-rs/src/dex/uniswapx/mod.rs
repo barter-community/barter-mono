@@ -128,96 +128,63 @@ pub fn filter_open_orders(
     return filtered_orders;
 }
 
-#[derive(Debug, Clone)]
-pub struct UniswapX {}
+pub fn select() -> UnboundedReceiver<MarketEvent<DataKind>> {
+    let (tx, rx) = mpsc::unbounded_channel();
 
-impl UniswapX {
-    pub fn new() -> Self {
-        UniswapX {}
-    }
+    tokio::spawn(async move {
+        let mut open_orders = Vec::<UniOrder>::new();
+        loop {
+            let mut result = get_open_orders(1).await;
+            match result {
+                Ok(orders) => {
+                    let mut new_orders = filter_open_orders(&open_orders, &orders);
 
-    pub fn test(&self) -> () {
-        tokio::spawn(async move {
-            let mut open_orders = Vec::<UniOrder>::new();
-            loop {
-                let tokens = TokenCache::instance().lock().await;
-                let result = tokens
-                    .get_token(
-                        &1,
-                        &String::from("0x1f9840a85d5aF5bf1D1762F925BDADdC4201F984"),
-                    )
-                    .await;
-                match result {
-                    Ok(token) => {
-                        println!("Got Token {}", token);
-                    }
-                    Err(e) => {
-                        eprintln!("Error occurred getting token! {}", e);
-                    }
-                }
-            }
-        });
-        ()
-    }
-
-    pub fn select(&self) -> UnboundedReceiver<MarketEvent<DataKind>> {
-        let (tx, rx) = mpsc::unbounded_channel();
-
-        tokio::spawn(async move {
-            let mut open_orders = Vec::<UniOrder>::new();
-            loop {
-                let mut result = get_open_orders(1).await;
-                match result {
-                    Ok(orders) => {
-                        let mut new_orders = filter_open_orders(&open_orders, &orders);
-
-                        // TODO - delete the orders that no longer exist.
-                        if new_orders.len() > 0 {
-                            // Convert to intent orders
-                            let result = map_uni_orders_to_intent_orders(
-                                new_orders.clone(),
-                                IntentOrderUpdate::Opened,
-                            )
-                            .await;
-                            match result {
-                                Ok(intent_orders) => {
-                                    for order in &intent_orders {
-                                        let _ = tx.send(MarketEvent {
-                                            exchange_time: chrono::Utc::now(),
-                                            received_time: chrono::Utc::now(),
-                                            exchange: Exchange::from("IntentOrder"),
-                                            instrument: Instrument::new(
-                                                order.in_token.clone(), // Todo improve instrument to use correct quote token
-                                                order.out_token.clone(),
-                                                InstrumentKind::IntentOrder,
-                                            ),
-                                            kind: DataKind::IntentOrder(order.clone()),
-                                        });
-                                    }
-                                }
-                                Err(e) => {
-                                    eprintln!(
-                                        "Error occurred mapping uni orders to intent orders! {}",
-                                        e
-                                    );
+                    // TODO - delete the orders that no longer exist.
+                    if new_orders.len() > 0 {
+                        // Convert to intent orders
+                        let result = map_uni_orders_to_intent_orders(
+                            new_orders.clone(),
+                            IntentOrderUpdate::Opened,
+                        )
+                        .await;
+                        match result {
+                            Ok(intent_orders) => {
+                                for order in &intent_orders {
+                                    let _ = tx.send(MarketEvent {
+                                        exchange_time: chrono::Utc::now(),
+                                        received_time: chrono::Utc::now(),
+                                        exchange: Exchange::from("IntentOrder"),
+                                        instrument: Instrument::new(
+                                            order.in_token.clone(), // Todo improve instrument to use correct quote token
+                                            order.out_token.clone(),
+                                            InstrumentKind::IntentOrder,
+                                        ),
+                                        kind: DataKind::IntentOrder(order.clone()),
+                                    });
                                 }
                             }
-                            open_orders.append(&mut new_orders);
+                            Err(e) => {
+                                eprintln!(
+                                    "Error occurred mapping uni orders to intent orders! {}",
+                                    e
+                                );
+                            }
                         }
-                    }
-                    Err(e) => {
-                        // Print dex error;
-                        eprintln!("Error occurred getting open orders! {}", e);
+                        open_orders.append(&mut new_orders);
                     }
                 }
-
-                // Delay for 1 second
-                let delay_duration = Duration::from_secs(2);
-                sleep(delay_duration).await;
+                Err(e) => {
+                    // Print dex error;
+                    eprintln!("Error occurred getting open orders! {}", e);
+                }
             }
-        });
-        return rx;
-    }
+
+            // Delay for 1 second
+            let delay_duration = Duration::from_secs(2);
+            sleep(delay_duration).await;
+        }
+    });
+    return rx;
 }
 
 fn deserialize_orders(json_str: &str) -> Result<Vec<UniOrder>, serde_json::Error> {

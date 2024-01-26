@@ -13,7 +13,7 @@ use barter::{
     strategy::example::{Config as StrategyConfig, RSIStrategy},
 };
 use barter_data::{
-    dex::uniswapx::UniswapX,
+    dex::uniswapx,
     event::{DataKind, MarketEvent},
     exchange::{binance::spot::BinanceSpot, ExchangeId},
     streams::Streams,
@@ -25,6 +25,7 @@ use barter_execution::{
     ExecutionClient,
 };
 use barter_integration::model::{instrument::kind::InstrumentKind, Market};
+use dotenv::dotenv;
 use parking_lot::Mutex;
 use std::{collections::HashMap, sync::Arc, time::Duration};
 use tokio::sync::mpsc;
@@ -156,9 +157,8 @@ async fn stream_market_event_trades() -> mpsc::UnboundedReceiver<MarketEvent<Dat
     //  - Use `streams.join()` to join all exchange streams into a single mpsc::UnboundedReceiver!
     let mut trade_rx = streams.select(ExchangeId::BinanceSpot).unwrap();
 
-    let uni = UniswapX::new();
-    let mut rx = uni.select();
-    let mut intent_orders = uni.select();
+    // Select the UniswapX stream
+    let mut intent_orders = uniswapx::select();
 
     let (tx, rx) = mpsc::unbounded_channel();
     let tx2 = tx.clone();
