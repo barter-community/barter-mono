@@ -92,7 +92,7 @@ impl TokenCache {
 
         // Connect to the network
 
-        let rpc_url = std::env::var("ETH_NODE_URL").expect("WSS_URL must be set.");
+        let rpc_url = std::env::var("ETH_NODE_URL").expect("ETH_NODE_URL must be set.");
         let provider: Provider<Http> = Provider::<Http>::try_from(rpc_url)?;
 
         // Create an instance of the ERC20 contract

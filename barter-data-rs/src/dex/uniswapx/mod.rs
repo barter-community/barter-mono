@@ -24,8 +24,6 @@ async fn map_uni_orders_to_intent_orders(
     let mut intent_orders = Vec::new();
 
     let tokens = TokenCache::instance().lock().await;
-    // tokio::pin!(tokens);
-    // let token = tokens.get_token(&1, &String::from("0x1f9840a85d5aF5bf1D1762F925BDADdC4201F984").to_string()).await.unwrap();
     for uni_order in uni_orders {
         // TODO: Why are there multiple output tokens?
         let token_in = tokens.get_token(&1, &uni_order.input.token).await?;
@@ -110,7 +108,7 @@ pub fn filter_open_orders(
     let mut filtered_orders: Vec<UniOrder> = Vec::new();
 
     for order in new_orders {
-        // us the order.order_hash to check if the order already exists in self.open_orders
+        // use the order.order_hash to check if the order already exists in self.open_orders
         let mut exists = false;
         for open_order in open_orders {
             if order.order_hash == open_order.order_hash {
