@@ -102,6 +102,9 @@ impl BinanceClient {
         let symbol = format!("{}{}", instrument.base, instrument.quote).to_uppercase();
         let mut query_params = QueryParams::new();
 
+        let builder = self.client.get_builder();
+        builder.query(&[("symbol", symbol)]);
+
         query_params.add_kv("symbol", symbol);
         // TODO better side logic?
         query_params.add_kv("side", get_order_side(order.decision));
