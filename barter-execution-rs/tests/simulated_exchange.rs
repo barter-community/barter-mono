@@ -190,7 +190,7 @@ async fn test_3_open_limit_buy_order(
     );
 
     assert_eq!(new_orders.len(), 1);
-    assert_eq!(new_orders[0].clone().unwrap(), expected_new_order);
+    assert_eq!(new_orders[0].as_ref().unwrap().clone(), expected_new_order);
 
     // Check AccountEvent Balance for quote currency (usdt) has available balance decrease
     match event_account_rx.try_recv() {
@@ -279,7 +279,7 @@ async fn test_5_cancel_buy_order(
     );
 
     assert_eq!(cancelled.len(), 1);
-    assert_eq!(cancelled[0].clone().unwrap(), expected_cancelled);
+    assert_eq!(cancelled[0].as_ref().unwrap().clone(), expected_cancelled);
 
     // Check AccountEvent Order cancelled
     match event_account_rx.try_recv() {
@@ -366,8 +366,14 @@ async fn test_6_open_2x_limit_buy_orders(
     );
 
     assert_eq!(opened_orders.len(), 2);
-    assert_eq!(opened_orders[0].clone().unwrap(), expected_order_new_1);
-    assert_eq!(opened_orders[1].clone().unwrap(), expected_order_new_2);
+    assert_eq!(
+        opened_orders[0].as_ref().unwrap().clone(),
+        expected_order_new_1
+    );
+    assert_eq!(
+        opened_orders[1].as_ref().unwrap().clone(),
+        expected_order_new_2
+    );
 
     // Check AccountEvent Balance for first order - quote currency has available balance decrease
     match event_account_rx.try_recv() {
@@ -582,8 +588,14 @@ async fn test_9_open_2x_limit_sell_orders(
     );
 
     assert_eq!(opened_orders.len(), 2);
-    assert_eq!(opened_orders[0].clone().unwrap(), expected_order_new_1);
-    assert_eq!(opened_orders[1].clone().unwrap(), expected_order_new_2);
+    assert_eq!(
+        opened_orders[0].as_ref().unwrap().clone(),
+        expected_order_new_1
+    );
+    assert_eq!(
+        opened_orders[1].as_ref().unwrap().clone(),
+        expected_order_new_2
+    );
 
     // Check AccountEvent Balance for first order - quote currency has available balance decrease
     match event_account_rx.try_recv() {
@@ -933,7 +945,7 @@ async fn test_13_fail_to_open_one_of_two_limits_with_insufficient_funds(
         ])
         .await;
 
-    let expected_order_new_1 = Err(ExecutionError::InsufficientBalance(Symbol::from("usdt")));
+    let expected_order_new_1 = ExecutionError::InsufficientBalance(Symbol::from("usdt"));
     let expected_order_new_2 = open_order(
         Instrument::from(("btc", "usdt", InstrumentKind::Perpetual)),
         test_13_ids_2.cid,
@@ -945,8 +957,14 @@ async fn test_13_fail_to_open_one_of_two_limits_with_insufficient_funds(
     );
 
     assert_eq!(opened_orders.len(), 2);
-    assert_eq!(opened_orders[0].clone(), expected_order_new_1);
-    assert_eq!(opened_orders[1].clone().unwrap(), expected_order_new_2);
+    match &opened_orders[0] {
+        Err(e) => assert_eq!(e.to_string(), expected_order_new_1.to_string()),
+        _ => panic!("Expected an IO error"),
+    }
+    assert_eq!(
+        opened_orders[1].as_ref().unwrap().clone(),
+        expected_order_new_2
+    );
 
     // Note: First order failed to due usdt InsufficientBalance, so don't expect any AccountEvents
 
@@ -1009,8 +1027,12 @@ async fn test_14_fail_to_cancel_limit_with_order_not_found(client: &SimulatedExe
         )])
         .await;
 
-    let expected = Err(ExecutionError::OrderNotFound(cid));
+    let expected = ExecutionError::OrderNotFound(cid);
 
     assert_eq!(cancelled.len(), 1);
-    assert_eq!(cancelled[0], expected);
+
+    match &cancelled[0] {
+        Err(e) => assert_eq!(e.to_string(), expected.to_string()),
+        _ => panic!("Expected an IO error"),
+    }
 }

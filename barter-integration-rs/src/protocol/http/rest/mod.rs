@@ -1,6 +1,6 @@
 use crate::metric::Tag;
 use serde::{de::DeserializeOwned, Serialize};
-use std::{marker::PhantomData, time::Duration};
+use std::{fmt::Display, marker::PhantomData, time::Duration};
 
 /// Configurable [`client::RestClient`] capable of executing signed [`RestRequest`]s and parsing
 /// responses.
@@ -9,13 +9,14 @@ pub mod client;
 /// Default Http [`reqwest::Request`] timeout Duration.
 const DEFAULT_HTTP_REQUEST_TIMEOUT: Duration = Duration::from_secs(5);
 
+type QueryKey = &'static str;
 /// Http REST request that can be executed by a [`RestClient`](self::client::RestClient).
 pub trait RestRequest {
     /// Expected response type if this request was successful.
     type Response: DeserializeOwned;
 
     /// Serialisable query parameters type - use unit struct () if not required for this request.
-    type QueryParams: Serialize;
+    // type QueryParams: Serialize;
 
     /// Serialisable Body type - use unit struct () if not required for this request.
     type Body: Serialize;
@@ -32,7 +33,7 @@ pub trait RestRequest {
     fn metric_tag(&self) -> Tag;
 
     /// Optional query parameters for this request.
-    fn query_params(&self) -> Option<&Self::QueryParams> {
+    fn query_params(&self) -> Option<&QueryParams> {
         None
     }
 
@@ -48,7 +49,7 @@ pub trait RestRequest {
 }
 
 #[derive(Debug)]
-pub struct ApiRequest<Response, QueryParams, Body> {
+pub struct ApiRequest<Response, Body> {
     pub path: &'static str,
     pub method: reqwest::Method,
     pub tag_method: &'static str,
@@ -57,14 +58,39 @@ pub struct ApiRequest<Response, QueryParams, Body> {
     pub response: PhantomData<Response>,
 }
 
-impl<Response, QueryParams, Body> RestRequest for ApiRequest<Response, QueryParams, Body>
+#[derive(Debug, Serialize)]
+pub struct QueryParams(Vec<(String, String)>);
+
+impl QueryParams {
+    pub fn new() -> Self {
+        Self(Vec::new())
+    }
+    pub fn add_kv(&mut self, key: QueryKey, value: impl Display + Sized) {
+        self.0.push((key.to_owned(), value.to_string()));
+    }
+}
+
+// impl<Response, Body> ApiRequest<Response, Body> {
+//     pub fn add_kv(&mut self, key: QueryKey, value: impl Display + Sized) {
+//         match self.query_params {
+//             Some(ref mut query_params) => {
+//                 query_params.push((key.to_owned(), value.to_string()));
+//             }
+//             None => {
+//                 let mut params: Vec<(String, String)> = Vec::new();
+//                 params.push((key.to_owned(), value.to_string()));
+//                 self.query_params = Some(params);
+//             }
+//         }
+//     }
+// }
+
+impl<Response, Body> RestRequest for ApiRequest<Response, Body>
 where
     Response: DeserializeOwned,
-    QueryParams: Serialize,
     Body: Serialize,
 {
     type Response = Response; // Define Response type
-    type QueryParams = QueryParams; // FetchBalances does not require any QueryParams
     type Body = Body; // FetchBalances does not require any Body
 
     fn path(&self) -> &'static str {
@@ -101,19 +127,45 @@ pub struct SimpleGetRequest<Response> {
     pub response: PhantomData<Response>,
 }
 
-impl<Response> RestRequest for SimpleGetRequest<Response>
-where
-    Response: DeserializeOwned,
-{
-    type Response = Response; // Define Response type
-    type QueryParams = (); // FetchBalances does not require any QueryParams
-    type Body = (); // FetchBalances does not require any Body
+// impl<Response> RestRequest for SimpleGetRequest<Response>
+// where
+//     Response: DeserializeOwned,
+// {
+//     type Response = Response; // Define Response type
+//     type QueryParams = (); // FetchBalances does not require any QueryParams
+//     type Body = (); // FetchBalances does not require any Body
 
-    fn path(&self) -> &'static str {
-        self.path
-    }
+//     fn path(&self) -> &'static str {
+//         self.path
+//     }
 
-    fn metric_tag(&self) -> Tag {
-        Tag::new("method", self.tag_method)
+//     fn metric_tag(&self) -> Tag {
+//         Tag::new("method", self.tag_method)
+//     }
+// }
+
+// impl<Response> From<SimpleGetRequest<Response>> for ApiRequest<Response, (), ()> {
+//     fn from(request: SimpleGetRequest<Response>) -> Self {
+//         Self {
+//             path: request.path,
+//             method: reqwest::Method::GET,
+//             tag_method: request.tag_method,
+//             body: None,
+//             query_params: None,
+//             response: PhantomData,
+//         }
+//     }
+// }
+
+pub const fn make_api_req<Response>(
+    request: SimpleGetRequest<Response>,
+) -> ApiRequest<Response, ()> {
+    ApiRequest {
+        path: request.path,
+        method: reqwest::Method::GET,
+        tag_method: request.tag_method,
+        body: None,
+        query_params: None,
+        response: PhantomData,
     }
 }

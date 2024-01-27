@@ -15,12 +15,12 @@ use tracing::warn;
 /// signature [`Encoder`](super::super::private::encoder::Encoder), and
 /// [`HttpParser`](super::super::HttpParser).
 #[derive(Debug)]
-pub struct RestClient<'a, Strategy, Parser> {
+pub struct RestClient<Strategy, Parser> {
     /// HTTP [`reqwest::Client`] for executing signed [`reqwest::Request`]s.
     pub http_client: reqwest::Client,
 
     /// Base Url of the API being interacted with.
-    pub base_url: &'a str,
+    pub base_url: String,
 
     /// [`Metric`] transmitter for sending observed execution measurements to an external receiver.
     pub metric_tx: mpsc::UnboundedSender<Metric>,
@@ -39,7 +39,7 @@ pub struct RestClient<'a, Strategy, Parser> {
     pub parser: Parser,
 }
 
-impl<'a, Strategy, Parser> RestClient<'a, Strategy, Parser>
+impl<'a, Strategy, Parser> RestClient<Strategy, Parser>
 where
     Strategy: BuildStrategy,
     Parser: HttpParser,
@@ -118,7 +118,7 @@ where
                 request_input.metric_tag(),
                 Tag::new("http_method", request_input.method().as_str()),
                 Tag::new("status_code", response.status().as_str()),
-                Tag::new("base_url", self.base_url),
+                Tag::new("base_url", self.base_url.as_str()),
             ],
             fields: vec![Field::new("duration", duration)],
         };
@@ -135,10 +135,10 @@ where
     }
 }
 
-impl<'a, Strategy, Parser> RestClient<'a, Strategy, Parser> {
+impl<Strategy, Parser> RestClient<Strategy, Parser> {
     /// Construct a new [`Self`] using the provided configuration.
     pub fn new(
-        base_url: &'a str,
+        base_url: String,
         metric_tx: mpsc::UnboundedSender<Metric>,
         strategy: Strategy,
         parser: Parser,

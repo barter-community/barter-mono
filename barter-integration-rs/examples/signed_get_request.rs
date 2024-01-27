@@ -105,7 +105,6 @@ pub struct FetchBalancesRequest;
 
 impl RestRequest for FetchBalancesRequest {
     type Response = FetchBalancesResponse; // Define Response type
-    type QueryParams = (); // FetchBalances does not require any QueryParams
     type Body = (); // FetchBalances does not require any Body
 
     fn path(&self) -> &'static str {
@@ -156,7 +155,12 @@ async fn main() {
     );
 
     // Build RestClient with Ftx configuration
-    let rest_client = RestClient::new("https://ftx.com", http_metric_tx, request_signer, FtxParser);
+    let rest_client = RestClient::new(
+        "https://ftx.com".to_string(),
+        http_metric_tx,
+        request_signer,
+        FtxParser,
+    );
 
     // Fetch Result<FetchBalancesResponse, ExecutionError>
     let _response = rest_client.execute(FetchBalancesRequest).await;

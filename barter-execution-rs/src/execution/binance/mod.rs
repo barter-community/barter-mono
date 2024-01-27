@@ -1,38 +1,117 @@
-use crate::{Cancelled, ExecutionError, Open, Order, RequestCancel, RequestOpen, SymbolBalance};
-use barter_data::subscription::trade::PublicTrade;
-use barter_integration::model::instrument::Instrument;
-use tokio::sync::oneshot;
+use async_trait::async_trait;
+use tokio::sync::mpsc;
 
-/// Simulated Exchange using public trade `Streams` to model available market liquidity. Liquidity
-/// is then used to match to open client orders.
-pub mod exchange;
+use crate::{
+    error::ExecutionError,
+    fill::FillEvent,
+    model::{
+        balance::SymbolBalance,
+        order::{Cancelled, Open, Order, RequestCancel, RequestOpen},
+        order_event::OrderEvent,
+        AccountEvent,
+    },
+    ExecutionClient, ExecutionId,
+};
 
-/// Simulated [`ExecutionClient`](crate::ExecutionClient) implementation that integrates with the
-/// Barter [`SimulatedExchange`](exchange::SimulatedExchange).
-pub mod execution;
+use self::{
+    connection::{BinanceApi, BinanceClient},
+    requests::{FUT_BALANCES_REQUEST, SPOT_BALANCES_REQUEST},
+};
 
-/// Events used to communicate with the Barter [`SimulatedExchange`](exchange::SimulatedExchange).
-///
-/// Two main types of [`SimulatedEvent`]:
-/// 1. Request sent from the [`SimulatedExecution`](execution::SimulatedExecution)
-///    [`ExecutionClient`](crate::ExecutionClient).
-/// 2. Market events used to model available liquidity and trigger matches with open client orders.
+pub mod connection;
+pub mod requests;
+
+/// Simulated [`ExecutionClient`] implementation that integrates with the Barter
+/// [`SimulatedExchange`](super::exchange::SimulatedExchange).
 #[derive(Debug)]
-pub enum BinanceEvent {
-    FetchOrdersOpen(oneshot::Sender<Result<Vec<Order<Open>>, ExecutionError>>),
-    FetchBalances(oneshot::Sender<Result<Vec<SymbolBalance>, ExecutionError>>),
-    OpenOrders(
-        (
-            Vec<Order<RequestOpen>>,
-            oneshot::Sender<Vec<Result<Order<Open>, ExecutionError>>>,
-        ),
-    ),
-    CancelOrders(
-        (
-            Vec<Order<RequestCancel>>,
-            oneshot::Sender<Vec<Result<Order<Cancelled>, ExecutionError>>>,
-        ),
-    ),
-    CancelOrdersAll(oneshot::Sender<Result<Vec<Order<Cancelled>>, ExecutionError>>),
-    MarketTrade((Instrument, PublicTrade)),
+pub struct BinanceExecution {
+    client: BinanceClient,
+    client_type: BinanceApi,
+}
+
+/// Config for initializing a [`SimulatedExecution`] instance.
+#[derive(Debug)]
+pub struct BinanceConfig {
+    client: BinanceClient,
+    client_type: BinanceApi,
+}
+
+#[async_trait]
+impl ExecutionClient for BinanceExecution {
+    const CLIENT: ExecutionId = ExecutionId::Simulated;
+    type Config = BinanceConfig;
+
+    async fn init(config: Self::Config, _: mpsc::UnboundedSender<AccountEvent>) -> Self {
+        Self {
+            client: config.client,
+            client_type: config.client_type,
+        }
+    }
+
+    fn generate_fill(&self, _order: &OrderEvent) -> Result<FillEvent, ExecutionError> {
+        // Assume (for now) that all orders are filled at the market price
+
+        // Ok(FillEvent {
+        //     time: Utc::now(),
+        //     exchange: order.exchange.clone(),
+        //     instrument: order.instrument.clone(),
+        //     market_meta: order.market_meta,
+        //     decision: order.decision,
+        //     quantity: order.quantity,
+        //     fill_value_gross,
+        //     fees: self.calculate_fees(&fill_value_gross),
+        // })
+        todo!()
+    }
+
+    async fn fetch_orders_open(&self) -> Result<Vec<Order<Open>>, ExecutionError> {
+        todo!()
+    }
+
+    async fn fetch_balances(&self) -> Result<Vec<SymbolBalance>, ExecutionError> {
+        let request = match self.client_type {
+            BinanceApi::Futures(_) => FUT_BALANCES_REQUEST,
+            BinanceApi::Spot(_) => todo!(),
+        };
+        match self.client.send(request).await {
+            Ok(response) => {
+                println!("{:#?}", response);
+                return Ok(<Vec<SymbolBalance>>::from(response));
+            }
+            Err(e) => {
+                println!("{:?}", e);
+                return Err(e);
+            }
+        }
+    }
+
+    async fn open_orders(
+        &self,
+        _open_requests: Vec<Order<RequestOpen>>,
+    ) -> Vec<Result<Order<Open>, ExecutionError>> {
+        todo!()
+    }
+
+    async fn cancel_orders(
+        &self,
+        _cancel_requests: Vec<Order<RequestCancel>>,
+    ) -> Vec<Result<Order<Cancelled>, ExecutionError>> {
+        todo!()
+    }
+
+    async fn cancel_orders_all(&self) -> Result<Vec<Order<Cancelled>>, ExecutionError> {
+        todo!()
+        // // Oneshot channel to communicate with the SimulatedExchange
+        // let (response_tx, response_rx) = oneshot::channel();
+
+        // // Send CancelOrdersAll request to the SimulatedExchange
+        // self.request_tx
+        //     .send(BinanceEvent::CancelOrdersAll(response_tx))
+        //     .expect("SimulatedExchange is offline - failed to send CancelOrdersAll request");
+
+        // // Receive CancelOrdersAll response from the SimulatedExchange
+        // response_rx
+        //     .await
+        //     .expect("SimulatedExchange is offline - failed to receive CancelOrdersAll response")
+    }
 }
