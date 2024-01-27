@@ -69,6 +69,7 @@ impl ExecutionClient for BinanceExecution {
     }
 
     async fn fetch_balances(&self) -> Result<Vec<SymbolBalance>, ExecutionError> {
+        // TODO: these produce different types of requests
         let request = match self.client_type {
             BinanceApi::Futures(_) => FUT_BALANCES_REQUEST,
             BinanceApi::Spot(_) => todo!(),
