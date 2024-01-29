@@ -1,5 +1,6 @@
 use super::SubKind;
 use barter_integration::model::instrument::Instrument;
+use num_bigint::BigInt;
 use serde::{Deserialize, Serialize};
 
 /// Barter [`Subscription`](super::Subscription) [`SubKind`] that yields [`IntentOrder`]
@@ -23,6 +24,8 @@ pub struct IntentOrder {
     pub instrument: Instrument,
     pub id: String,
     pub amount: f64,
+    pub amount_in: String,
+    pub amount_out: String,
     pub buy: bool,
     pub start_ask: f64,
     pub end_ask: f64,

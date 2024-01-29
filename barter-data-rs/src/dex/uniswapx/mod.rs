@@ -3,10 +3,7 @@ use super::tokens::TokenCache;
 use super::DexError;
 use crate::event::{DataKind, MarketEvent};
 use crate::subscription::intent_order::{IntentOrder, IntentOrderUpdate};
-use barter_integration::model::{
-    instrument::{kind::InstrumentKind, Instrument},
-    Exchange,
-};
+use barter_integration::model::instrument::{kind::InstrumentKind, Instrument};
 use eyre::Result;
 use market::Market;
 use num_bigint::BigInt;
@@ -24,7 +21,7 @@ fn convert_bigint_string_to_float(
     bigint_str: &str,
     decimals: i32,
     radix: u32,
-) -> Result<f64, DexError> {
+) -> Result<(f64), DexError> {
     let result = BigInt::parse_bytes(bigint_str.as_bytes(), radix);
     match result {
         Some(bigint) => {
@@ -91,7 +88,9 @@ async fn map_uni_orders_to_intent_orders(
             id: uni_order.order_hash,
             event,
             instrument,
-            amount,
+            amount: amount,
+            amount_in: uni_order.input.start_amount,
+            amount_out: uni_order.outputs[0].start_amount.clone(),
             start_ask,
             end_ask,
             price: start_ask,
