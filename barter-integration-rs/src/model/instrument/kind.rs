@@ -12,7 +12,6 @@ pub enum InstrumentKind {
     Future(FutureContract),
     Perpetual,
     Option(OptionContract),
-    Erc20,
     IntentOrder,
 }
 
@@ -39,7 +38,6 @@ impl Display for InstrumentKind {
                     option.expiry.date_naive(),
                     option.strike,
                 ),
-                InstrumentKind::Erc20 => "erc20".to_string(),
                 InstrumentKind::IntentOrder => "intent_order".to_string(),
             }
         )

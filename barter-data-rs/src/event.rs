@@ -124,14 +124,14 @@ impl From<MarketEvent<Liquidation>> for MarketEvent<DataKind> {
     }
 }
 
-impl From<MarketEvent<IntentOrder>> for MarketEvent<DataKind> {
-    fn from(event: MarketEvent<IntentOrder>) -> Self {
+impl From<&IntentOrder> for MarketEvent<DataKind> {
+    fn from(order: &IntentOrder) -> Self {
         Self {
-            exchange_time: event.exchange_time,
-            received_time: event.received_time,
-            exchange: event.exchange,
-            instrument: event.instrument,
-            kind: DataKind::IntentOrder(event.kind),
+            exchange_time: chrono::Utc::now(),
+            received_time: chrono::Utc::now(),
+            exchange: Exchange::from("IntentOrder"),
+            instrument: order.instrument.clone(),
+            kind: DataKind::IntentOrder(order.clone()),
         }
     }
 }

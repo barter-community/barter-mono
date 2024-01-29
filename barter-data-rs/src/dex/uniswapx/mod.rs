@@ -87,7 +87,7 @@ async fn map_uni_orders_to_intent_orders(
             output_end_amt / input_end_amt
         };
 
-        let intent_order: IntentOrder = IntentOrder {
+        let intent_order = IntentOrder {
             id: uni_order.order_hash,
             event,
             instrument,
@@ -154,19 +154,17 @@ pub fn filter_open_orders(
     let mut exists_list: Vec<String> = Vec::new();
 
     for order in new_orders {
-        // use the order.order_hash to check if the order already exists in self.open_orders
-        let mut exists = false;
-        for open_order in open_orders.clone() {
-            if order.order_hash == open_order.order_hash {
-                exists = true;
-                if !exists_list.contains(&order.order_hash) {
-                    exists_list.push(order.order_hash.clone());
-                }
-                break;
+        // Check if the order already exists in open_orders
+        if let Some(_) = open_orders
+            .iter()
+            .find(|&open_order| open_order.order_hash == order.order_hash)
+        {
+            // If it exists, check if it's not in exists_list and add it if necessary
+            if !exists_list.contains(&order.order_hash) {
+                exists_list.push(order.order_hash.clone());
             }
-        }
-
-        if !exists {
+        } else {
+            // If it does not exist, push to filtered_orders
             filtered_orders.push(order.clone());
         }
     }
@@ -183,28 +181,18 @@ pub fn filter_open_orders(
     let mut sorted_indices = remove_list.clone();
     sorted_indices.sort_unstable_by(|a, b| b.cmp(a)); // Sort in reverse
     sorted_indices.dedup(); // Remove duplicates
-    // Remove old orders
+                            // Remove old orders
     for index in sorted_indices {
         if index < open_orders.len() {
             open_orders.remove(index);
         }
     }
-    
+
     // return filtered orders
     return filtered_orders;
 }
 
-fn to_market_event(order: &IntentOrder) -> MarketEvent<DataKind> {
-    MarketEvent {
-        exchange_time: chrono::Utc::now(),
-        received_time: chrono::Utc::now(),
-        exchange: Exchange::from("IntentOrder"),
-        instrument: order.instrument.clone(),
-        kind: DataKind::IntentOrder(order.clone()),
-    }
-}
-
-pub fn select() -> UnboundedReceiver<MarketEvent<DataKind>> {
+pub fn init() -> UnboundedReceiver<MarketEvent<DataKind>> {
     let (tx, rx) = mpsc::unbounded_channel();
 
     tokio::spawn(async move {
@@ -225,7 +213,7 @@ pub fn select() -> UnboundedReceiver<MarketEvent<DataKind>> {
                         match result {
                             Ok(intent_orders) => {
                                 for order in &intent_orders {
-                                    let _ = tx.send(to_market_event(&order));
+                                    let _ = tx.send(MarketEvent::from(order));
                                 }
                             }
                             Err(e) => {

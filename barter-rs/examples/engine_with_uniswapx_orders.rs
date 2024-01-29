@@ -158,7 +158,7 @@ async fn stream_market_event_trades() -> mpsc::UnboundedReceiver<MarketEvent<Dat
     let mut trade_rx = streams.select(ExchangeId::BinanceSpot).unwrap();
 
     // Select the UniswapX stream
-    let mut intent_orders = uniswapx::select();
+    let mut intent_orders = uniswapx::init();
 
     let (tx, rx) = mpsc::unbounded_channel();
     let tx2 = tx.clone();
