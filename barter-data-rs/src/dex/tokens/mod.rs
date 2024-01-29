@@ -1,7 +1,6 @@
 use super::DexError;
-use core::fmt;
 use ethers::{
-    contract::{abigen, ContractError},
+    contract::abigen,
     core::types::Address,
     providers::{Http, Provider},
 };
@@ -27,7 +26,7 @@ abigen!(
 pub struct Token {
     pub addr: String,
     pub symbol: String,
-    pub decimals: u8,
+    pub decimals: i32,
 }
 
 lazy_static! {
@@ -109,7 +108,7 @@ impl TokenCache {
         let token = Token {
             addr: address.to_string(),
             symbol: symbol,
-            decimals: decimals,
+            decimals: decimals as i32,
         };
         Ok(token)
     }

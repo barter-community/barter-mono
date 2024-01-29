@@ -1,4 +1,5 @@
 use super::SubKind;
+use barter_integration::model::instrument::Instrument;
 use serde::{Deserialize, Serialize};
 
 /// Barter [`Subscription`](super::Subscription) [`SubKind`] that yields [`IntentOrder`]
@@ -19,13 +20,10 @@ pub enum IntentOrderUpdate {
 #[derive(Clone, PartialEq, PartialOrd, Debug, Deserialize, Serialize)]
 pub struct IntentOrder {
     pub event: IntentOrderUpdate,
+    pub instrument: Instrument,
     pub id: String,
-    pub in_token: String,
-    pub in_token_addr: String,
-    pub in_amount: f64,
-    pub out_token: String,
-    pub out_token_addr: String,
-    pub out_amount: f64,
+    pub amount: f64,
+    pub buy: bool,
     pub start_ask: f64,
     pub end_ask: f64,
     pub price: f64,

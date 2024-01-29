@@ -1,3 +1,6 @@
+use self::uni_order::{Response, UniOrder};
+use super::tokens::TokenCache;
+use super::DexError;
 use crate::event::{DataKind, MarketEvent};
 use crate::subscription::intent_order::{IntentOrder, IntentOrderUpdate};
 use barter_integration::model::{
@@ -5,17 +8,34 @@ use barter_integration::model::{
     Exchange,
 };
 use eyre::Result;
+use market::Market;
+use num_bigint::BigInt;
+use num_traits::ToPrimitive;
 use reqwest;
-
-use self::uni_order::{Response, UniOrder};
-use super::tokens::TokenCache;
-use super::DexError;
 use tokio::sync::mpsc::{self, UnboundedReceiver};
 use tokio::time::{sleep, Duration};
 
+pub mod market;
 pub mod uni_order;
 
 const UNISWAPX_API: &str = "https://api.uniswap.org/v2/orders";
+
+fn convert_bigint_string_to_float(
+    bigint_str: &str,
+    decimals: i32,
+    radix: u32,
+) -> Result<f64, DexError> {
+    let result = BigInt::parse_bytes(bigint_str.as_bytes(), radix);
+    match result {
+        Some(bigint) => {
+            let float = bigint.to_f64().unwrap() / 10f64.powi(decimals);
+            return Ok(float);
+        }
+        None => {
+            return Err(DexError::Error("Failed to parse BigInt".to_owned()));
+        }
+    }
+}
 
 async fn map_uni_orders_to_intent_orders(
     uni_orders: Vec<UniOrder>,
@@ -28,29 +48,54 @@ async fn map_uni_orders_to_intent_orders(
         // TODO: Why are there multiple output tokens?
         let token_in = tokens.get_token(&1, &uni_order.input.token).await?;
         let token_out = tokens.get_token(&1, &uni_order.outputs[0].token).await?;
-        // TODO: Fetch decimals for tokens from the token list
-        let start_ask = uni_order.outputs[0].start_amount.parse::<f64>().unwrap()
-            / uni_order.input.start_amount.parse::<f64>().unwrap();
-        let end_ask = uni_order.outputs[0].end_amount.parse::<f64>().unwrap()
-            / uni_order.input.start_amount.parse::<f64>().unwrap();
-        let price = uni_order.outputs[0].end_amount.parse::<f64>().unwrap()
-            / uni_order.input.start_amount.parse::<f64>().unwrap();
 
-        let intent_order = IntentOrder {
+        let market = Market::new(&token_in, &token_out);
+        let (quote, base, buy) =
+            market::Market::get_quote_and_base(&market.quotes, &token_in.symbol, &token_out.symbol);
+        let instrument: Instrument =
+            Instrument::new(quote.clone(), base.clone(), InstrumentKind::IntentOrder);
+
+        let input_start_amt =
+            convert_bigint_string_to_float(&uni_order.input.start_amount, token_in.decimals, 10)?;
+        let output_start_amt = convert_bigint_string_to_float(
+            &uni_order.outputs[0].start_amount,
+            token_out.decimals,
+            10,
+        )?;
+        let input_end_amt =
+            convert_bigint_string_to_float(&uni_order.input.end_amount, token_in.decimals, 10)?;
+        let output_end_amt = convert_bigint_string_to_float(
+            &uni_order.outputs[0].end_amount,
+            token_out.decimals,
+            10,
+        )?;
+
+        // Handle orientation for instrument
+        let amount = if market.buy {
+            output_start_amt
+        } else {
+            input_start_amt
+        };
+        let start_ask = if market.buy {
+            input_start_amt / output_start_amt
+        } else {
+            output_start_amt / input_start_amt
+        };
+        let end_ask = if market.buy {
+            input_end_amt / output_end_amt
+        } else {
+            output_end_amt / input_end_amt
+        };
+
+        let intent_order: IntentOrder = IntentOrder {
+            id: uni_order.order_hash,
             event,
-            id: uni_order.order_hash.clone(),
-            in_token: token_in.symbol.clone(),
-            in_token_addr: token_in.addr.clone(),
-            in_amount: uni_order.input.start_amount.parse::<f64>().unwrap_or(0.0),
-            out_token: token_out.symbol.clone(),
-            out_token_addr: token_out.addr.clone(),
-            out_amount: uni_order.outputs[0]
-                .end_amount
-                .parse::<f64>()
-                .unwrap_or(0.0),
+            instrument,
+            amount,
             start_ask,
             end_ask,
-            price,
+            price: start_ask,
+            buy: market.buy,
             created_at: uni_order.created_at,
             order_type: uni_order.order_type.clone(),
             signature: uni_order.signature.clone(),
@@ -100,19 +145,23 @@ pub async fn get_order_by_hash(hash: String) -> Result<UniOrder, DexError> {
     }
 }
 
-// filter orders that don't already exist in self.open_orders
+// filter orders that don't already exist in self.open_orders, and remove old orders in open_orders
 pub fn filter_open_orders(
-    open_orders: &Vec<UniOrder>,
+    open_orders: &mut Vec<UniOrder>,
     new_orders: &Vec<UniOrder>,
 ) -> Vec<UniOrder> {
     let mut filtered_orders: Vec<UniOrder> = Vec::new();
+    let mut exists_list: Vec<String> = Vec::new();
 
     for order in new_orders {
         // use the order.order_hash to check if the order already exists in self.open_orders
         let mut exists = false;
-        for open_order in open_orders {
+        for open_order in open_orders.clone() {
             if order.order_hash == open_order.order_hash {
                 exists = true;
+                if !exists_list.contains(&order.order_hash) {
+                    exists_list.push(order.order_hash.clone());
+                }
                 break;
             }
         }
@@ -122,8 +171,37 @@ pub fn filter_open_orders(
         }
     }
 
+    // Using exists_list remove the orders in open_orders that no longer exist (they have been filled or cancelled)
+    let mut remove_list: Vec<usize> = Vec::new();
+    for (i, open_order) in open_orders.iter().enumerate() {
+        if !exists_list.contains(&open_order.order_hash) {
+            remove_list.push(i);
+        }
+    }
+
+    // Sort the indices in reverse order and remove duplicates
+    let mut sorted_indices = remove_list.clone();
+    sorted_indices.sort_unstable_by(|a, b| b.cmp(a)); // Sort in reverse
+    sorted_indices.dedup(); // Remove duplicates
+    // Remove old orders
+    for index in sorted_indices {
+        if index < open_orders.len() {
+            open_orders.remove(index);
+        }
+    }
+    
     // return filtered orders
     return filtered_orders;
+}
+
+fn to_market_event(order: &IntentOrder) -> MarketEvent<DataKind> {
+    MarketEvent {
+        exchange_time: chrono::Utc::now(),
+        received_time: chrono::Utc::now(),
+        exchange: Exchange::from("IntentOrder"),
+        instrument: order.instrument.clone(),
+        kind: DataKind::IntentOrder(order.clone()),
+    }
 }
 
 pub fn select() -> UnboundedReceiver<MarketEvent<DataKind>> {
@@ -135,9 +213,8 @@ pub fn select() -> UnboundedReceiver<MarketEvent<DataKind>> {
             let mut result = get_open_orders(1).await;
             match result {
                 Ok(orders) => {
-                    let mut new_orders = filter_open_orders(&open_orders, &orders);
+                    let mut new_orders = filter_open_orders(&mut open_orders, &orders);
 
-                    // TODO - delete the orders that no longer exist.
                     if new_orders.len() > 0 {
                         // Convert to intent orders
                         let result = map_uni_orders_to_intent_orders(
@@ -148,17 +225,7 @@ pub fn select() -> UnboundedReceiver<MarketEvent<DataKind>> {
                         match result {
                             Ok(intent_orders) => {
                                 for order in &intent_orders {
-                                    let _ = tx.send(MarketEvent {
-                                        exchange_time: chrono::Utc::now(),
-                                        received_time: chrono::Utc::now(),
-                                        exchange: Exchange::from("IntentOrder"),
-                                        instrument: Instrument::new(
-                                            order.in_token.clone(), // Todo improve instrument to use correct quote token
-                                            order.out_token.clone(),
-                                            InstrumentKind::IntentOrder,
-                                        ),
-                                        kind: DataKind::IntentOrder(order.clone()),
-                                    });
+                                    let _ = tx.send(to_market_event(&order));
                                 }
                             }
                             Err(e) => {
