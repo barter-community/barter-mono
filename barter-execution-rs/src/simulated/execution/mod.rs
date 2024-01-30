@@ -45,7 +45,7 @@ impl ExecutionClient for SimulatedExecution {
         }
     }
 
-    fn generate_fill(&self, order: &OrderEvent) -> Result<FillEvent, ExecutionError> {
+    async fn generate_fill(&self, order: &OrderEvent) -> Result<FillEvent, ExecutionError> {
         // Assume (for now) that all orders are filled at the market price
         let fill_value_gross = SimulatedExecution::calculate_fill_value_gross(order);
 
@@ -165,6 +165,7 @@ mod tests {
         instrument::{kind::InstrumentKind, Instrument},
         Exchange,
     };
+    use uuid::Uuid;
 
     use crate::{
         fill::{Decision, MarketMeta},
@@ -176,6 +177,7 @@ mod tests {
     /// Build an [`OrderEvent`] to buy 1.0 contract.
     pub fn order_event() -> OrderEvent {
         OrderEvent {
+            id: Uuid::new_v4(),
             time: Utc::now(),
             exchange: Exchange::from("binance"),
             instrument: Instrument::from(("eth", "usdt", InstrumentKind::Spot)),
@@ -205,7 +207,7 @@ mod tests {
         input_order.quantity = 10.0;
         input_order.market_meta.close = 10.0;
 
-        let actual_result = simulated_execution.generate_fill(&input_order);
+        let actual_result = simulated_execution.generate_fill(&input_order).await;
 
         let expected_fill_value_gross = 100.0;
         let expected_fees = Fees {

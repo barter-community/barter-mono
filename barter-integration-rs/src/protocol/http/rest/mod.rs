@@ -9,7 +9,6 @@ pub mod client;
 /// Default Http [`reqwest::Request`] timeout Duration.
 const DEFAULT_HTTP_REQUEST_TIMEOUT: Duration = Duration::from_secs(5);
 
-type QueryKey = &'static str;
 /// Http REST request that can be executed by a [`RestClient`](self::client::RestClient).
 pub trait RestRequest {
     /// Expected response type if this request was successful.
@@ -58,32 +57,22 @@ pub struct ApiRequest<Response, Body> {
     pub response: PhantomData<Response>,
 }
 
-#[derive(Debug, Serialize)]
-pub struct QueryParams(Vec<(String, String)>);
-
-impl QueryParams {
-    pub fn new() -> Self {
-        Self(Vec::new())
-    }
-    pub fn add_kv(&mut self, key: QueryKey, value: impl Display + Sized) {
-        self.0.push((key.to_owned(), value.to_string()));
+impl<Response, Body> ApiRequest<Response, Body> {
+    pub const fn new(
+        path: &'static str,
+        method: reqwest::Method,
+        tag_method: &'static str,
+    ) -> Self {
+        Self {
+            path,
+            method,
+            tag_method,
+            body: None,
+            query_params: None,
+            response: PhantomData,
+        }
     }
 }
-
-// impl<Response, Body> ApiRequest<Response, Body> {
-//     pub fn add_kv(&mut self, key: QueryKey, value: impl Display + Sized) {
-//         match self.query_params {
-//             Some(ref mut query_params) => {
-//                 query_params.push((key.to_owned(), value.to_string()));
-//             }
-//             None => {
-//                 let mut params: Vec<(String, String)> = Vec::new();
-//                 params.push((key.to_owned(), value.to_string()));
-//                 self.query_params = Some(params);
-//             }
-//         }
-//     }
-// }
 
 impl<Response, Body> RestRequest for ApiRequest<Response, Body>
 where
@@ -120,52 +109,16 @@ where
     }
 }
 
-#[derive(Debug)]
-pub struct SimpleGetRequest<Response> {
-    pub path: &'static str,
-    pub tag_method: &'static str,
-    pub response: PhantomData<Response>,
-}
+type QueryKey = &'static str;
 
-// impl<Response> RestRequest for SimpleGetRequest<Response>
-// where
-//     Response: DeserializeOwned,
-// {
-//     type Response = Response; // Define Response type
-//     type QueryParams = (); // FetchBalances does not require any QueryParams
-//     type Body = (); // FetchBalances does not require any Body
+#[derive(Debug, Serialize)]
+pub struct QueryParams(Vec<(String, String)>);
 
-//     fn path(&self) -> &'static str {
-//         self.path
-//     }
-
-//     fn metric_tag(&self) -> Tag {
-//         Tag::new("method", self.tag_method)
-//     }
-// }
-
-// impl<Response> From<SimpleGetRequest<Response>> for ApiRequest<Response, (), ()> {
-//     fn from(request: SimpleGetRequest<Response>) -> Self {
-//         Self {
-//             path: request.path,
-//             method: reqwest::Method::GET,
-//             tag_method: request.tag_method,
-//             body: None,
-//             query_params: None,
-//             response: PhantomData,
-//         }
-//     }
-// }
-
-pub const fn make_api_req<Response>(
-    request: SimpleGetRequest<Response>,
-) -> ApiRequest<Response, ()> {
-    ApiRequest {
-        path: request.path,
-        method: reqwest::Method::GET,
-        tag_method: request.tag_method,
-        body: None,
-        query_params: None,
-        response: PhantomData,
+impl QueryParams {
+    pub fn new() -> Self {
+        Self(Vec::new())
+    }
+    pub fn add_kv(&mut self, key: QueryKey, value: impl Display + Sized) {
+        self.0.push((key.to_owned(), value.to_string()));
     }
 }

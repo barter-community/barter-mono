@@ -23,8 +23,6 @@ use crate::{
     model::order_event::{OrderEvent, OrderExecutionType, OrderType},
 };
 
-use super::requests::BalancesResponse;
-
 #[derive(Debug, Copy, Clone)]
 pub enum LiveOrTest {
     Live,
@@ -47,10 +45,34 @@ pub struct BinanceClient {
 }
 
 impl BinanceClient {
+    pub fn new_with_url(api_type: BinanceApi, url: String) -> BinanceClient {
+        Self::build_client(api_type, url)
+    }
+
     pub fn new(api_type: BinanceApi) -> BinanceClient {
+        let client_url = Self::get_url(api_type);
+        Self::build_client(api_type, client_url.to_string())
+    }
+
+    fn build_client(api_type: BinanceApi, client_url: String) -> BinanceClient {
         dotenv().ok();
-        let api_key = std::env::var("BINANCE_API_KEY").expect("BINANCE_API_KEY must be set.");
-        let api_secret = std::env::var("BINANCE_SECRET").expect("BINANCE_SECRET must be set.");
+
+        let (api_key, api_secret) = match api_type {
+            BinanceApi::Spot(LiveOrTest::Live) | BinanceApi::Futures(LiveOrTest::Live) => {
+                let api_key =
+                    std::env::var("BINANCE_API_KEY").expect("BINANCE_API_KEY must be set.");
+                let api_secret =
+                    std::env::var("BINANCE_SECRET").expect("BINANCE_SECRET must be set.");
+                (api_key, api_secret)
+            }
+            BinanceApi::Spot(LiveOrTest::Test) | BinanceApi::Futures(LiveOrTest::Test) => {
+                let api_key = std::env::var("BINANCE_TEST_API_KEY")
+                    .expect("BINANCE_TEST_API_KEY must be set.");
+                let api_secret =
+                    std::env::var("BINANCE_TEST_SECRET").expect("BINANCE_TEST_SECRET must be set.");
+                (api_key, api_secret)
+            }
+        };
 
         // // Construct Metric channel to send Http execution metrics over
         let (http_metric_tx, _http_metric_rx) = mpsc::unbounded_channel();
@@ -63,26 +85,24 @@ impl BinanceClient {
             },
         );
 
-        let client_url = match api_type {
-            BinanceApi::Spot(_) => "https://api.binance.com",
-            BinanceApi::Futures(kind) => match kind {
-                LiveOrTest::Live => "https://fapi.binance.com",
-                LiveOrTest::Test => "https://testnet.binancefuture.com",
-            },
-        };
-
         // Build RestClient with Binance configuration
-        let client = RestClient::new(
-            client_url.to_string(),
-            http_metric_tx,
-            request_signer,
-            BinanceParser,
-        );
+        let client = RestClient::new(client_url, http_metric_tx, request_signer, BinanceParser);
         BinanceClient {
             client,
             kind: api_type,
         }
     }
+
+    fn get_url(api_type: BinanceApi) -> &'static str {
+        match api_type {
+            BinanceApi::Spot(_) => "https://api.binance.com",
+            BinanceApi::Futures(kind) => match kind {
+                LiveOrTest::Live => "https://fapi.binance.com",
+                LiveOrTest::Test => "https://testnet.binancefuture.com",
+            },
+        }
+    }
+
     pub async fn send<Request>(&self, request: Request) -> Result<Request::Response, ExecutionError>
     where
         Request: RestRequest,
@@ -91,7 +111,7 @@ impl BinanceClient {
         self.client.execute(request).await
     }
 
-    pub(super) async fn create_order<Response>(
+    pub async fn submit_order<Response>(
         &self,
         order: &OrderEvent,
     ) -> Result<Response, ExecutionError>
@@ -102,15 +122,12 @@ impl BinanceClient {
         let symbol = format!("{}{}", instrument.base, instrument.quote).to_uppercase();
         let mut query_params = QueryParams::new();
 
-        let builder = self.client.get_builder();
-        builder.query(&[("symbol", symbol)]);
-
         query_params.add_kv("symbol", symbol);
         // TODO better side logic?
         query_params.add_kv("side", get_order_side(order.decision));
+        // TODO handle quantity & price precision
         query_params.add_kv("quantity", order.quantity);
-        // TODO should we generate our own?
-        // builder.add_kv("newClientOrderId", &header.client_order_id);
+        query_params.add_kv("newClientOrderId", order.id);
 
         match order.order_type {
             OrderType::Limit {
@@ -126,7 +143,10 @@ impl BinanceClient {
                 }
                 query_params.add_kv("price", price);
             }
-            OrderType::Market => query_params.add_kv("type", "MARKET"),
+            OrderType::Market => {
+                query_params.add_kv("type", "MARKET");
+                query_params.add_kv("newOrderRespType", "RESULT");
+            }
             OrderType::StopLoss { stop_price } => {
                 query_params.add_kv("type", "STOP_LOSS");
                 query_params.add_kv("stopPrice", stop_price);
@@ -146,10 +166,15 @@ impl BinanceClient {
             }
             _ => todo!("Order type not supported"),
         }
+        let path = match self.kind {
+            BinanceApi::Futures(LiveOrTest::Live) => "/fapi/v1/order",
+            BinanceApi::Futures(LiveOrTest::Test) => "/fapi/v1/order",
+            _ => todo!("Api type not supported"),
+        };
         let request: ApiRequest<Response, ()> = ApiRequest {
-            path: "/sapi/v3/asset/getUserAsset",
+            path,
             method: reqwest::Method::POST,
-            tag_method: "fetch_balances",
+            tag_method: "place_order",
             body: None,
             query_params: Some(query_params),
             response: PhantomData,
@@ -247,9 +272,15 @@ impl HttpParser for BinanceParser {
     type ApiError = serde_json::Value;
     type OutputError = ExecutionError;
 
-    fn parse_api_error(&self, status: StatusCode, api_error: Self::ApiError) -> Self::OutputError {
+    fn parse_api_error(
+        &self,
+        status: StatusCode,
+        api_error: Self::ApiError,
+        parse_api_error: serde_json::Error,
+    ) -> Self::OutputError {
         // For simplicity, use serde_json::Value as Error and extract raw String for parsing
-        let error = api_error.to_string();
+        // and combine serde_json::Error with serde_json::Value error
+        let error = parse_api_error.to_string() + &api_error.to_string();
 
         // Parse Ftx error message to determine custom ExecutionError variant
         match error.as_str() {
@@ -258,5 +289,91 @@ impl HttpParser for BinanceParser {
             }
             _ => ExecutionError::Socket(SocketError::HttpResponse(status, error)),
         }
+    }
+}
+
+// write test for create_order with mock
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{
+        execution::binance::requests::FutOrderResponse, fill::MarketMeta,
+        model::order_event::OrderEventBuilder,
+    };
+    use barter_integration::model::{
+        instrument::{kind::InstrumentKind, symbol::Symbol, Instrument},
+        Exchange,
+    };
+    use mockito::Matcher;
+    use serde_json::json;
+
+    #[tokio::test]
+    async fn test_create_order() {
+        let mut server = mockito::Server::new();
+
+        let url = server.url();
+        let client = BinanceClient::new_with_url(BinanceApi::Futures(LiveOrTest::Test), url);
+
+        let _m = server
+            .mock("POST", "/fapi/v1/order")
+            .match_query(Matcher::AllOf(vec![
+                Matcher::UrlEncoded("symbol".into(), "ETHUSDT".into()),
+                Matcher::UrlEncoded("side".into(), "BUY".into()),
+                Matcher::UrlEncoded("quantity".into(), "0.001".into()),
+                Matcher::UrlEncoded("type".into(), "LIMIT".into()),
+                Matcher::UrlEncoded("timeInForce".into(), "GTC".into()),
+                Matcher::UrlEncoded("price".into(), "10000".into()),
+            ]))
+            .with_status(200)
+            .with_body(
+                json!(
+                    {
+                        "orderId": 20072994037 as u64,
+                        "symbol": "ETHUSDT",
+                        "pair": "ETHUSDT",
+                        "status": "NEW",
+                        "clientOrderId": "LJ9R4QZDihCaS8UAOOLpgW",
+                        "price": "30005",
+                        "avgPrice": "0.0",
+                        "origQty": "1",
+                        "executedQty": "0",
+                        "cumQty": "0",
+                        "cumBase": "0",
+                        "timeInForce": "GTC",
+                        "type": "LIMIT",
+                        "reduceOnly": false,
+                        "closePosition": false,
+                        "side": "BUY",
+                        "positionSide": "LONG",
+                        "stopPrice": "0",
+                        "workingType": "CONTRACT_PRICE",
+                        "priceProtect": false,
+                        "origType": "LIMIT",
+                        "priceMatch": "NONE",              //price match mode
+                        "selfTradePreventionMode": "NONE", //self trading preventation mode
+                        "goodTillDate": 0,      //order pre-set auot cancel time for TIF GTD order
+                        "updateTime": 1629182711600 as u64
+                    }
+                )
+                .to_string(),
+            )
+            .create();
+        let order = OrderEventBuilder::new()
+            .instrument(Instrument::new("BTC", "USDT", InstrumentKind::Perpetual))
+            .decision(Decision::Long)
+            .quantity(0.001)
+            .order_type(OrderType::Limit {
+                price: 10000.0,
+                execution_type: OrderExecutionType::None,
+            })
+            .time(Utc::now())
+            .exchange(Exchange::from("binance"))
+            .market_meta(MarketMeta::default())
+            .build()
+            .expect("Failed to build order");
+        println!("order {:#?}", order);
+        let response: FutOrderResponse = client.submit_order(&order).await.unwrap();
+        println!("resopnse {:#?}", response);
+        assert_eq!(response.symbol, Symbol::from("ETHUSDT"));
     }
 }

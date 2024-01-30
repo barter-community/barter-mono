@@ -70,7 +70,7 @@ pub trait ExecutionClient {
     async fn init(config: Self::Config, event_tx: mpsc::UnboundedSender<AccountEvent>) -> Self;
 
     /// Return a [`FillEvent`] from executing the input [`OrderEvent`].
-    fn generate_fill(&self, order: &OrderEvent) -> Result<FillEvent, ExecutionError>;
+    async fn generate_fill(&self, order: &OrderEvent) -> Result<FillEvent, ExecutionError>;
 
     /// Fetch account [`Order<Open>`]s.
     async fn fetch_orders_open(&self) -> Result<Vec<Order<Open>>, ExecutionError>;

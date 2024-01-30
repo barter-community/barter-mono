@@ -77,7 +77,12 @@ impl HttpParser for FtxParser {
     type ApiError = serde_json::Value;
     type OutputError = ExecutionError;
 
-    fn parse_api_error(&self, status: StatusCode, api_error: Self::ApiError) -> Self::OutputError {
+    fn parse_api_error(
+        &self,
+        status: StatusCode,
+        api_error: Self::ApiError,
+        _parse_api_error: serde_json::Error,
+    ) -> Self::OutputError {
         // For simplicity, use serde_json::Value as Error and extract raw String for parsing
         let error = api_error.to_string();
 

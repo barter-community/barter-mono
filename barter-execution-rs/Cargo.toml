@@ -44,9 +44,10 @@ sha2 = "0.10.6"
 hex = "0.4.3"
 
 # Misc
-uuid = { version = "0.8.2", features = ["v4", "serde"] }
+uuid = { version = "1.2.2", features = ["v4", "serde"] }
 chrono = { version = "0.4.22", features = ["serde"] }
 parking_lot = "0.12.1"
 num-traits = "0.2.15"
 bytes = "1.2.1"
 dotenv = "0.15.0"
+mockito = "1.2.0"

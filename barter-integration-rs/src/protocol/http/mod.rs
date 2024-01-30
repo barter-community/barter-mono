@@ -66,7 +66,7 @@ pub trait HttpParser {
 
         // Attempt to deserialise API Error if Ok(Response) deserialisation failed
         let parse_api_error_error = match serde_json::from_slice::<Self::ApiError>(payload) {
-            Ok(api_error) => return Err(self.parse_api_error(status, api_error)),
+            Ok(api_error) => return Err(self.parse_api_error(status, api_error, parse_ok_error)),
             Err(serde_error) => serde_error,
         };
 
@@ -87,5 +87,10 @@ pub trait HttpParser {
 
     /// If [`parse`](Self::parse) fails to deserialise the `Ok(Response)`, this function parses
     /// to parse the API [`Self::ApiError`] associated with the response.
-    fn parse_api_error(&self, status: StatusCode, error: Self::ApiError) -> Self::OutputError;
+    fn parse_api_error(
+        &self,
+        status: StatusCode,
+        error: Self::ApiError,
+        parse_error: serde_json::Error,
+    ) -> Self::OutputError;
 }

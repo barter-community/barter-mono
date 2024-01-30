@@ -1,9 +1,10 @@
 use async_trait::async_trait;
+use chrono::Utc;
 use tokio::sync::mpsc;
 
 use crate::{
     error::ExecutionError,
-    fill::FillEvent,
+    fill::{Fees, FillEvent},
     model::{
         balance::SymbolBalance,
         order::{Cancelled, Open, Order, RequestCancel, RequestOpen},
@@ -15,7 +16,7 @@ use crate::{
 
 use self::{
     connection::{BinanceApi, BinanceClient},
-    requests::{FUT_BALANCES_REQUEST, SPOT_BALANCES_REQUEST},
+    requests::{FutOrderResponse, FUT_BALANCES_REQUEST},
 };
 
 pub mod connection;
@@ -26,7 +27,7 @@ pub mod requests;
 #[derive(Debug)]
 pub struct BinanceExecution {
     client: BinanceClient,
-    client_type: BinanceApi,
+    // client_type: BinanceApi,
 }
 
 /// Config for initializing a [`SimulatedExecution`] instance.
@@ -44,24 +45,28 @@ impl ExecutionClient for BinanceExecution {
     async fn init(config: Self::Config, _: mpsc::UnboundedSender<AccountEvent>) -> Self {
         Self {
             client: config.client,
-            client_type: config.client_type,
+            // client_type: config.client_type,
         }
     }
 
-    fn generate_fill(&self, _order: &OrderEvent) -> Result<FillEvent, ExecutionError> {
-        // Assume (for now) that all orders are filled at the market price
+    async fn generate_fill(&self, order: &OrderEvent) -> Result<FillEvent, ExecutionError> {
+        let result: FutOrderResponse = self.client.submit_order(order).await?;
 
-        // Ok(FillEvent {
-        //     time: Utc::now(),
-        //     exchange: order.exchange.clone(),
-        //     instrument: order.instrument.clone(),
-        //     market_meta: order.market_meta,
-        //     decision: order.decision,
-        //     quantity: order.quantity,
-        //     fill_value_gross,
-        //     fees: self.calculate_fees(&fill_value_gross),
-        // })
-        todo!()
+        Ok(FillEvent {
+            time: Utc::now(),
+            exchange: order.exchange.clone(),
+            instrument: order.instrument.clone(),
+            market_meta: order.market_meta,
+            decision: order.decision,
+            quantity: order.quantity,
+            fill_value_gross: result.cumQty,
+            // TODO: compute fees
+            fees: Fees {
+                exchange: 0.0,
+                slippage: 0.0,
+                network: 0.0,
+            },
+        })
     }
 
     async fn fetch_orders_open(&self) -> Result<Vec<Order<Open>>, ExecutionError> {
@@ -69,12 +74,7 @@ impl ExecutionClient for BinanceExecution {
     }
 
     async fn fetch_balances(&self) -> Result<Vec<SymbolBalance>, ExecutionError> {
-        // TODO: these produce different types of requests
-        let request = match self.client_type {
-            BinanceApi::Futures(_) => FUT_BALANCES_REQUEST,
-            BinanceApi::Spot(_) => todo!(),
-        };
-        match self.client.send(request).await {
+        match self.client.send(FUT_BALANCES_REQUEST).await {
             Ok(response) => {
                 println!("{:#?}", response);
                 return Ok(<Vec<SymbolBalance>>::from(response));

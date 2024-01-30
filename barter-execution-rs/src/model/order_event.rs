@@ -2,6 +2,7 @@ use barter_integration::model::{instrument::Instrument, Exchange};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
+use uuid::Uuid;
 
 use crate::fill::{Decision, MarketMeta};
 
@@ -16,6 +17,7 @@ pub enum OrderEventError {
 /// open a trade.
 #[derive(Clone, Debug, PartialEq, Deserialize, Serialize)]
 pub struct OrderEvent {
+    pub id: Uuid,
     pub time: DateTime<Utc>,
     pub exchange: Exchange,
     pub instrument: Instrument,
@@ -137,6 +139,7 @@ impl OrderEventBuilder {
 
     pub fn build(self) -> Result<OrderEvent, OrderEventError> {
         Ok(OrderEvent {
+            id: Uuid::new_v4(),
             time: self
                 .time
                 .ok_or(OrderEventError::BuilderIncomplete("time"))?,
@@ -149,6 +152,7 @@ impl OrderEventBuilder {
             market_meta: self
                 .market_meta
                 .ok_or(OrderEventError::BuilderIncomplete("market_meta"))?,
+            // .ok_or(OrderEventError::BuilderIncomplete("market_meta"))?,
             decision: self
                 .decision
                 .ok_or(OrderEventError::BuilderIncomplete("decision"))?,

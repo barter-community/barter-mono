@@ -322,6 +322,7 @@ pub mod test_util {
     /// Build an [`OrderEvent`] to buy 1.0 contract.
     pub fn order_event() -> OrderEvent {
         OrderEvent {
+            id: Default::default(),
             time: Utc::now(),
             exchange: Exchange::from("binance"),
             instrument: Instrument::from(("eth", "usdt", InstrumentKind::Spot)),
