@@ -37,6 +37,7 @@ impl<Server, Kind> Identifier<GateioMarket> for Subscription<Gateio<Server>, Kin
                         OptionKind::Put => "P",
                     },
                 ),
+                _ => panic!("Unsupported instrument kind: {}", kind),
             }
             .to_uppercase(),
         )

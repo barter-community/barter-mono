@@ -38,6 +38,7 @@ impl<Kind> Identifier<OkxMarket> for Subscription<Okx, Kind> {
                 },
             )
             .to_uppercase(),
+            _ => panic!("Unsupported instrument kind: {}", kind),
         })
     }
 }
