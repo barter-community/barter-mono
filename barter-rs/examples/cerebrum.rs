@@ -1,12 +1,21 @@
 use barter::cerebrum::{
     account::{Account, Accounts, Position},
-    event::{Balance, Command, Event, EventFeed},
-    exchange::ExecutionRequest,
+    event::{Command, Event, EventFeed},
+    exchange::{ClientId, ExchangePortal},
     strategy,
     strategy::IndicatorUpdater,
     Engine,
 };
-use barter_execution::model::order::{Order, RequestCancel, RequestOpen};
+use barter_execution::{
+    fill::Fees,
+    model::{
+        balance::Balance,
+        execution_event::ExecutionRequest,
+        order::{Order, RequestCancel, RequestOpen},
+    },
+    simulated::execution::SimulationConfig,
+    ExecutionId,
+};
 use dotenv::dotenv;
 
 use barter_data::{
@@ -54,7 +63,7 @@ impl strategy::OrderGenerator for StrategyExample {
 }
 
 // Notes:
-// - Hard-coded to use one Exchange, Ftx
+// - Hard-coded to use one Exchange, Binance
 #[tokio::main]
 async fn main() {
     dotenv().ok();
@@ -184,29 +193,25 @@ where
 // Todo:
 //  - Will change when we setup the ExchangeClients properly, likely needs Vec<Instrument>
 fn init_account_feed(
-    _event_tx: mpsc::UnboundedSender<Event>,
-    mut exchange_rx: mpsc::UnboundedReceiver<ExecutionRequest>,
+    event_tx: mpsc::UnboundedSender<Event>,
+    exchange_rx: mpsc::UnboundedReceiver<ExecutionRequest>,
 ) {
-    tokio::task::spawn(async move {
-        while let Some(request) = exchange_rx.recv().await {
-            match request {
-                ExecutionRequest::FetchOrdersOpen(_) => {
-                    // Todo:
-                }
-                ExecutionRequest::FetchBalances(_) => {
-                    // Todo:
-                }
-                ExecutionRequest::OpenOrders(_) => {
-                    // Todo:
-                }
-                ExecutionRequest::CancelOrders(_) => {
-                    // Todo:
-                }
-                ExecutionRequest::CancelOrdersAll(_) => {
-                    // Todo:
-                }
-            }
-        }
+    let mut exchanges = HashMap::new();
+    let sim_config = SimulationConfig {
+        simulated_fees_pct: Fees {
+            exchange: 0.1,
+            slippage: 0.05,
+            network: 0.0,
+        },
+        request_tx: mpsc::unbounded_channel().0,
+    };
+    exchanges.insert(ExecutionId::Simulated, ClientId::Simulated(sim_config));
+
+    tokio::spawn(async move {
+        let ex_portal = ExchangePortal::init(exchanges, exchange_rx, event_tx)
+            .await
+            .expect("failed to init ExchangePortal");
+        ex_portal.run();
     });
 }
 

@@ -20,18 +20,16 @@ use tokio::sync::{mpsc, oneshot};
 /// Simulated [`ExecutionClient`] implementation that integrates with the Barter
 /// [`SimulatedExchange`](super::exchange::SimulatedExchange).
 #[derive(Debug)]
-pub struct SimulatedExecution {
+pub struct SimulatedExecution<Event> {
     /// Simulated fee percentage to be used for each [`Fees`] field in decimal form (eg/ 0.01 for 1%)
     pub fees_pct: Fees,
     pub request_tx: mpsc::UnboundedSender<SimulatedEvent>,
 
-    pub event_tx: mpsc::UnboundedSender<AccountEvent>,
-    pub order_tx: mpsc::UnboundedSender<ExchangeRequest>,
-    pub order_rx: mpsc::UnboundedReceiver<ExchangeRequest>,
+    pub event_tx: mpsc::UnboundedSender<Event>,
 }
 
 /// Config for initializing a [`SimulatedExecution`] instance.
-#[derive(Clone, Debug)]
+#[derive(Debug, Clone)]
 pub struct SimulationConfig {
     /// Simulated fee percentage to be used for each [`Fees`] field in decimal form (eg/ 0.01 for 1%)
     pub simulated_fees_pct: Fees,
@@ -39,31 +37,24 @@ pub struct SimulationConfig {
 }
 
 #[async_trait]
-impl ExecutionClient for SimulatedExecution {
+impl<Event> ExecutionClient for SimulatedExecution<Event>
+where
+    Event: Send + From<AccountEvent>,
+{
     const CLIENT: ExecutionId = ExecutionId::Simulated;
     type Config = SimulationConfig;
+    type Event = Event;
 
-    async fn init(config: Self::Config, event_tx: mpsc::UnboundedSender<AccountEvent>) -> Self {
-        let (order_tx, order_rx) = mpsc::unbounded_channel();
+    async fn init(config: Self::Config, event_tx: mpsc::UnboundedSender<Event>) -> Self {
         Self {
             request_tx: config.request_tx,
             fees_pct: config.simulated_fees_pct,
             event_tx,
-            order_tx,
-            order_rx,
         }
     }
 
-    fn request_tx(&self) -> mpsc::UnboundedSender<ExchangeRequest> {
-        self.order_tx.clone()
-    }
-
-    fn event_tx(&self) -> mpsc::UnboundedSender<AccountEvent> {
-        self.event_tx.clone()
-    }
-
-    fn exchange(&self) -> Exchange {
-        Exchange::from(ExecutionId::Simulated)
+    fn event_tx(&self) -> &mpsc::UnboundedSender<Event> {
+        &self.event_tx
     }
 
     // async fn generate_fill(&self, order: &OrderEvent) -> Result<FillEvent, ExecutionError> {
@@ -164,7 +155,7 @@ impl ExecutionClient for SimulatedExecution {
     }
 }
 
-impl SimulatedExecution {
+impl<Event> SimulatedExecution<Event> {
     /// Calculates the simulated gross fill value (excluding TotalFees) based on the input [`OrderEvent`].
     fn calculate_fill_value_gross(order: &OrderEvent) -> f64 {
         order.quantity.abs() * order.market_meta.close
@@ -249,7 +240,7 @@ mod tests {
         input_order.quantity = 100.0;
         input_order.market_meta.close = 10.0;
 
-        let actual = SimulatedExecution::calculate_fill_value_gross(&input_order);
+        let actual = SimulatedExecution::<AccountEvent>::calculate_fill_value_gross(&input_order);
 
         let expected = 100.0 * 10.0;
 
@@ -262,7 +253,7 @@ mod tests {
         input_order.quantity = -(100.0);
         input_order.market_meta.close = 10.0;
 
-        let actual = SimulatedExecution::calculate_fill_value_gross(&input_order);
+        let actual = SimulatedExecution::<AccountEvent>::calculate_fill_value_gross(&input_order);
 
         let expected = (100.0 * 10.0) as f64;
 
@@ -271,7 +262,7 @@ mod tests {
 
     #[tokio::test]
     async fn should_calculate_simulated_fees_correctly() {
-        let simulated_execution = SimulatedExecution::init(
+        let simulated_execution = SimulatedExecution::<AccountEvent>::init(
             SimulationConfig {
                 simulated_fees_pct: Fees {
                     exchange: 0.5,

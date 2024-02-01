@@ -60,6 +60,7 @@ async fn main() {
     let client = SimulatedExecution {
         fees_pct,
         request_tx: event_simulated_tx.clone(),
+        event_tx: mpsc::unbounded_channel().0,
     };
 
     // 1. Fetch initial OpenOrders when we have no open Orders
@@ -145,13 +146,15 @@ async fn main() {
 }
 
 // 1. Fetch initial OpenOrders when we have no open Orders.
-async fn test_1_fetch_initial_orders_and_check_empty(client: &SimulatedExecution) {
+async fn test_1_fetch_initial_orders_and_check_empty(client: &SimulatedExecution<AccountEvent>) {
     let initial_orders = client.fetch_orders_open().await.unwrap();
     assert!(initial_orders.is_empty());
 }
 
 // 2. Fetch initial Balances when there have been no balance changing events.
-async fn test_2_fetch_balances_and_check_same_as_initial(client: &SimulatedExecution) {
+async fn test_2_fetch_balances_and_check_same_as_initial(
+    client: &SimulatedExecution<AccountEvent>,
+) {
     let actual_balances = client.fetch_balances().await.unwrap();
     let initial_balances = initial_balances();
 
@@ -165,7 +168,7 @@ async fn test_2_fetch_balances_and_check_same_as_initial(client: &SimulatedExecu
 
 // 3. Open LIMIT Buy Order and check AccountEvent Balance is sent for the quote currency (usdt).
 async fn test_3_open_limit_buy_order(
-    client: &SimulatedExecution,
+    client: &SimulatedExecution<AccountEvent>,
     test_3_ids: Ids,
     event_account_rx: &mut mpsc::UnboundedReceiver<AccountEvent>,
 ) {
@@ -258,7 +261,7 @@ fn test_4_send_market_event_that_does_not_match_any_open_order(
 
 // 5. Cancel the open buy order and check AccountEvents for cancelled order and balance are sent.
 async fn test_5_cancel_buy_order(
-    client: &SimulatedExecution,
+    client: &SimulatedExecution<AccountEvent>,
     test_3_ids: Ids,
     event_account_rx: &mut mpsc::UnboundedReceiver<AccountEvent>,
 ) {
@@ -321,7 +324,7 @@ async fn test_5_cancel_buy_order(
 
 // 6. Open 2x limit buy orders and check AccountEvents for balance & order new are sent
 async fn test_6_open_2x_limit_buy_orders(
-    client: &SimulatedExecution,
+    client: &SimulatedExecution<AccountEvent>,
     test_6_ids_1: Ids,
     test_6_ids_2: Ids,
     event_account_rx: &mut mpsc::UnboundedReceiver<AccountEvent>,
@@ -522,7 +525,7 @@ async fn test_7_send_market_event_that_exact_full_matches_order(
 
 // 8. Fetch open orders & check there is only one limit buy order remaining from test_6_order_cid_1.
 async fn test_8_fetch_open_orders_and_check_test_6_order_cid_1_only(
-    client: &SimulatedExecution,
+    client: &SimulatedExecution<AccountEvent>,
     test_6_ids_1: Ids,
 ) {
     let open_orders = client.fetch_orders_open().await.unwrap();
@@ -543,7 +546,7 @@ async fn test_8_fetch_open_orders_and_check_test_6_order_cid_1_only(
 
 // 9. Open 2x LIMIT Sell Order & check AccountEvents for balances and order news are sent.
 async fn test_9_open_2x_limit_sell_orders(
-    client: &SimulatedExecution,
+    client: &SimulatedExecution<AccountEvent>,
     test_9_ids_1: Ids,
     test_9_ids_2: Ids,
     event_account_rx: &mut mpsc::UnboundedReceiver<AccountEvent>,
@@ -825,7 +828,7 @@ async fn test_10_send_market_event_that_full_and_partial_matches_orders(
 // 11. Cancel all open orders. Includes a partially filled sell order, and non-filled buy order.
 //     Check AccountEvents for orders cancelled and balances are sent.
 async fn test_11_cancel_all_orders(
-    client: &SimulatedExecution,
+    client: &SimulatedExecution<AccountEvent>,
     test_6_ids_1: Ids,
     test_9_ids_2: Ids,
     event_account_rx: &mut mpsc::UnboundedReceiver<AccountEvent>,
@@ -914,14 +917,14 @@ async fn test_11_cancel_all_orders(
 }
 
 // 12. Fetch open orders (now that we've called cancel_all) and check it is empty
-async fn test_12_fetch_open_orders_and_check_empty(client: &SimulatedExecution) {
+async fn test_12_fetch_open_orders_and_check_empty(client: &SimulatedExecution<AccountEvent>) {
     let open_orders = client.fetch_orders_open().await.unwrap();
     assert!(open_orders.is_empty());
 }
 
 // 13. Fail to open limit buy order with insufficient funds
 async fn test_13_fail_to_open_one_of_two_limits_with_insufficient_funds(
-    client: &SimulatedExecution,
+    client: &SimulatedExecution<AccountEvent>,
     test_13_ids_1: Ids,
     test_13_ids_2: Ids,
     event_account_rx: &mut mpsc::UnboundedReceiver<AccountEvent>,
@@ -1016,7 +1019,9 @@ async fn test_13_fail_to_open_one_of_two_limits_with_insufficient_funds(
 }
 
 // 14. Fail to cancel limit order with OrderNotFound using incorrect OrderId
-async fn test_14_fail_to_cancel_limit_with_order_not_found(client: &SimulatedExecution) {
+async fn test_14_fail_to_cancel_limit_with_order_not_found(
+    client: &SimulatedExecution<AccountEvent>,
+) {
     let cid = ClientOrderId(Uuid::new_v4());
     let cancelled = client
         .cancel_orders(vec![order_cancel_request(

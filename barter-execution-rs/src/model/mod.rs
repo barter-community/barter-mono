@@ -38,6 +38,9 @@ pub enum AccountEventKind {
 
     // HTTP & WebSocket
     Balances(Vec<SymbolBalance>),
+    // TODO
+    // ExecutionError(ExecutionError),
+    // ConnectionStatus,
 }
 
 #[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash, Debug, Deserialize, Serialize)]

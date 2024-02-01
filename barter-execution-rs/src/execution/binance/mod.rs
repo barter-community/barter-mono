@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, marker::PhantomData};
 
 use async_trait::async_trait;
 use barter_integration::model::{
@@ -32,47 +32,44 @@ pub mod requests;
 /// Simulated [`ExecutionClient`] implementation that integrates with the Barter
 /// [`SimulatedExchange`](super::exchange::SimulatedExchange).
 #[derive(Debug)]
-pub struct BinanceExecution {
+pub struct BinanceExecution<Event> {
     client: BinanceClient,
     instruments_map: HashMap<BinancePair, Instrument>,
     // client_type: BinanceApi,
-    pub event_tx: mpsc::UnboundedSender<AccountEvent>,
+    pub event_tx: mpsc::UnboundedSender<Event>,
     pub order_tx: mpsc::UnboundedSender<ExchangeRequest>,
 }
 
 /// Config for initializing a [`SimulatedExecution`] instance.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct BinanceConfig {
-    client: BinanceClient,
     client_type: BinanceApi,
     instruments: Vec<Instrument>,
+    order_tx: mpsc::UnboundedSender<ExchangeRequest>,
 }
 
 #[async_trait]
-impl ExecutionClient for BinanceExecution {
+impl<Event> ExecutionClient for BinanceExecution<Event>
+where
+    Event: Send + From<AccountEvent>,
+{
     const CLIENT: ExecutionId = ExecutionId::Simulated;
     type Config = BinanceConfig;
+    type Event = Event;
 
-    async fn init(config: Self::Config, event_tx: mpsc::UnboundedSender<AccountEvent>) -> Self {
-        let (order_tx, order_rx) = mpsc::unbounded_channel();
+    async fn init(config: Self::Config, event_tx: mpsc::UnboundedSender<Event>) -> Self {
+        let client = BinanceClient::new(config.client_type);
         Self {
-            client: config.client,
+            client,
             instruments_map: Self::instruments_map(config.instruments),
-            event_tx, // client_type: config.client_type,
+            event_tx,
             order_tx: config.order_tx,
+            // client_type: config.client_type,
         }
     }
 
-    fn request_tx(&self) -> mpsc::UnboundedSender<ExchangeRequest> {
-        self.order_tx.clone()
-    }
-
-    fn event_tx(&self) -> mpsc::UnboundedSender<AccountEvent> {
-        self.event_tx.clone()
-    }
-
-    fn exchange(&self) -> Exchange {
-        Exchange::from(ExecutionId::Binance)
+    fn event_tx(&self) -> &mpsc::UnboundedSender<Event> {
+        &self.event_tx
     }
 
     // async fn generate_fill(&self, order: &OrderEvent) -> Result<FillEvent, ExecutionError> {
@@ -151,7 +148,7 @@ impl BinancePair {
         Self(format!("{base}{quote}").to_uppercase())
     }
 }
-impl BinanceExecution {
+impl<Event> BinanceExecution<Event> {
     fn instruments_map(instruments: Vec<Instrument>) -> HashMap<BinancePair, Instrument> {
         instruments
             .into_iter()

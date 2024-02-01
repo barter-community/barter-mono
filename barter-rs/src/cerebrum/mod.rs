@@ -2,8 +2,7 @@ use self::{
     account::{AccountUpdater, Accounts},
     command::Commander,
     consume::Consumer,
-    event::{AccountEvent, EventFeed},
-    exchange::ExecutionRequest,
+    event::EventFeed,
     initialise::Initialiser,
     market::MarketUpdater,
     order::{Algorithmic, Manual, OrderGenerator},
@@ -12,6 +11,7 @@ use self::{
 };
 use crate::engine::error::EngineError;
 use barter_data::event::{DataKind, MarketEvent};
+use barter_execution::model::{execution_event::ExecutionRequest, AccountEvent};
 use tokio::sync::mpsc;
 
 pub mod account;

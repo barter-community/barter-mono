@@ -1,7 +1,8 @@
 use super::event::Event;
-use barter_execution::model::order::{Order, RequestCancel, RequestOpen};
-use barter_execution::model::AccountEvent;
+use barter_execution::execution::binance::BinanceExecution;
+use barter_execution::model::execution_event::{ExchangeRequest, ExecutionRequest};
 use barter_execution::simulated::execution::SimulatedExecution;
+use barter_execution::ExecutionId;
 use barter_execution::{
     execution::binance::BinanceConfig, simulated::execution::SimulationConfig, ExecutionClient,
 };
@@ -19,23 +20,19 @@ use tracing::info;
 /// - Map InternalClientOrderId to exchange ClientOrderId.
 
 #[derive(Debug)]
-pub struct ExchangePortal<Client>
-where
-    Client: ExecutionClient,
-{
-    clients: HashMap<Exchange, mpsc::UnboundedReceiver<ExecutionRequest>>,
+pub struct ExchangePortal {
+    // TODO: do we need to store exchanges? For re-initialization?
+    exchanges: HashMap<ExecutionId, ClientId>,
+    clients: HashMap<Exchange, mpsc::UnboundedSender<ExchangeRequest>>,
     request_rx: mpsc::UnboundedReceiver<ExecutionRequest>,
     event_tx: mpsc::UnboundedSender<Event>,
 }
 
-impl<Client> ExchangePortal<Client>
-where
-    Client: ExecutionClient,
-{
+impl ExchangePortal {
     pub async fn init(
-        exchanges: HashMap<Exchange, ClientId>,
-        // event_tx: mpsc::UnboundedSender<Event>,
-        event_tx: mpsc::UnboundedSender<AccountEvent>,
+        exchanges: HashMap<ExecutionId, ClientId>,
+        request_rx: mpsc::UnboundedReceiver<ExecutionRequest>,
+        event_tx: mpsc::UnboundedSender<Event>,
     ) -> Result<Self, ()> {
         // Todo:
         //  - Validate input
@@ -43,26 +40,40 @@ where
         //  - Can ExchangePortal act as the Driver? Yes.
         //  - Make ExchangePortal state machine...
 
-        // 1. Store HashMap<Exchange, ClientId> for association & to keep every ClientId(Config)
-        // 2. Spawn tasks for every ExchangeClient
-        // 3. Monitor ConnectionStatus of each task
-        // 4. Re-spawn ExchangeClient if required
+        // 1. Store HashMap<Exchange, ClientId> for association & to keep every ClientId(Config)√
+        // 2. Spawn tasks for every ExchangeClient √
+        // 3. Monitor ConnectionStatus of each task √
+        // 4. Re-spawn ExchangeClient if required TODO?
 
-        let clients: HashMap<Exchange, Client> = HashMap::new();
+        let mut clients = HashMap::new();
 
-        for (exchange, client_id) in exchanges {
+        for (execution_id, client_id) in exchanges.iter() {
             match client_id {
                 ClientId::Simulated(config) => {
-                    let client = SimulatedExecution::init(config, event_tx.clone()).await;
-                    clients.insert(exchange.clone(), client);
+                    let (execution_tx, execution_rx) = mpsc::unbounded_channel();
+                    let client = SimulatedExecution::init(config.clone(), event_tx.clone()).await;
+                    clients.insert(Exchange::from(execution_id.clone()), execution_tx);
+                    tokio::spawn(async move {
+                        client.run(execution_rx).await;
+                    });
                 }
-                ClientId::Binance(config) => {}
+                ClientId::Binance(config) => {
+                    let (execution_tx, execution_rx) = mpsc::unbounded_channel();
+                    let client = BinanceExecution::init(config.clone(), event_tx.clone()).await;
+                    clients.insert(Exchange::from(execution_id.clone()), execution_tx);
+                    tokio::spawn(async move {
+                        client.run(execution_rx).await;
+                    });
+                }
             }
-
-            // Runner
         }
 
-        Err(())
+        Ok(Self {
+            exchanges,
+            clients,
+            request_rx,
+            event_tx,
+        })
     }
 
     /// Todo:
@@ -82,44 +93,46 @@ where
 
             // Action ExecutionRequest
             match request {
-                ExecutionRequest::FetchOrdersOpen(exchanges) => {}
-                ExecutionRequest::FetchBalances(exchanges) => {}
-                ExecutionRequest::OpenOrders(open_requests) => {}
-                ExecutionRequest::CancelOrders(cancel_requests) => {}
-                ExecutionRequest::CancelOrdersAll(exchanges) => {}
+                ExecutionRequest::FetchOrdersOpen(exchanges) => {
+                    exchanges.into_iter().for_each(|exchange| {
+                        let client = self.client(&exchange);
+                        (*client).send(ExchangeRequest::FetchOrdersOpen);
+                    });
+                }
+                ExecutionRequest::FetchBalances(exchanges) => {
+                    exchanges.into_iter().for_each(|exchange| {
+                        let client = self.client(&exchange);
+                        (*client).send(ExchangeRequest::FetchBalances);
+                    });
+                }
+                ExecutionRequest::OpenOrders(open_requests) => {
+                    open_requests.into_iter().for_each(|open_request| {
+                        let client = self.client(&open_request.0);
+                        (*client).send(ExchangeRequest::OpenOrders(open_request.1));
+                    });
+                }
+                ExecutionRequest::CancelOrders(cancel_requests) => {
+                    cancel_requests.into_iter().for_each(|cancel_request| {
+                        let client = self.client(&cancel_request.0);
+                        (*client).send(ExchangeRequest::CancelOrders(cancel_request.1));
+                    });
+                }
+                ExecutionRequest::CancelOrdersAll(exchanges) => {
+                    exchanges.into_iter().for_each(|exchange| {
+                        let client = self.client(&exchange);
+                        (*client).send(ExchangeRequest::CancelOrdersAll);
+                    });
+                }
             }
         }
     }
 
     /// Retrieve the [`ExchangeClient`] associated with the [`Exchange`].
-    pub fn client(&mut self, exchange: &Exchange) -> &Client {
+    pub fn client(&mut self, exchange: &Exchange) -> &mpsc::UnboundedSender<ExchangeRequest> {
         self.clients
             .get(exchange)
             .expect("cannot retrieve ExchangeClient for unexpected Exchange")
     }
-}
-
-// Todo: If we pass tuple (Exchange, Order<Request>), the OrderRequest should maybe be diff that doesn't include Exchange
-#[derive(Debug)]
-pub enum ExecutionRequest {
-    // Check ExchangeClient status
-    // ClientStatus(Vec<Exchange>),
-
-    // Fetch Account State
-    FetchBalances(Vec<Exchange>),
-    FetchOrdersOpen(Vec<Exchange>),
-
-    // Open Orders
-    // OpenOrder(Order<RequestOpen>),
-    // OpenOrderBatch(Order<Vec<RequestOpen>>),
-    OpenOrders(Vec<(Exchange, Vec<Order<RequestOpen>>)>),
-
-    // Cancel Orders
-    // CancelOrderById,
-    // CancelOrderByInstrument,
-    // CancelOrderByBatch,
-    CancelOrders(Vec<(Exchange, Vec<Order<RequestCancel>>)>),
-    CancelOrdersAll(Vec<Exchange>),
 }
 
 #[derive(Debug, Clone, Copy)]

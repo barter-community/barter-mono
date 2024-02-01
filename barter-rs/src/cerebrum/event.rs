@@ -1,13 +1,6 @@
-use crate::cerebrum::exchange::ClientStatus;
 use barter_data::event::{DataKind, MarketEvent};
-use barter_execution::model::order::{Cancelled, Open, Order};
 use barter_execution::model::AccountEvent;
-use barter_execution::{error::ExecutionError, model::order::InFlight};
-use barter_integration::model::{
-    instrument::{symbol::Symbol, Instrument},
-    Exchange, Side,
-};
-use chrono::{DateTime, Utc};
+use barter_integration::model::{instrument::Instrument, Side};
 use tokio::sync::mpsc;
 
 #[derive(Debug)]
@@ -15,6 +8,12 @@ pub enum Event {
     Market(MarketEvent<DataKind>),
     Account(AccountEvent),
     Command(Command),
+}
+
+impl From<AccountEvent> for Event {
+    fn from(account_event: AccountEvent) -> Self {
+        Self::Account(account_event)
+    }
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -44,29 +43,4 @@ impl EventFeed {
             }
         }
     }
-}
-
-#[derive(Debug)]
-pub struct Trade {
-    pub id: TradeId,
-    pub order_id: String,
-    pub instrument: Instrument,
-    pub side: Side,
-    pub price: f64,
-    pub amount: f64,
-}
-
-#[derive(Debug)]
-pub struct TradeId(pub String);
-
-#[derive(Debug)]
-pub struct SymbolBalance {
-    pub symbol: Symbol,
-    pub balance: Balance,
-}
-
-#[derive(Clone, Copy, Debug)]
-pub struct Balance {
-    pub total: f64,
-    pub available: f64,
 }

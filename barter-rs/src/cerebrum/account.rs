@@ -1,12 +1,9 @@
-use super::{
-    consume::Consumer,
-    event::{AccountEvent, AccountEventKind, Balance, SymbolBalance},
-    Cerebrum, Engine,
-};
+use super::{consume::Consumer, Cerebrum, Engine};
 use barter_data::event::{DataKind, MarketEvent};
 use barter_execution::model::{
+    balance::{Balance, SymbolBalance},
     order::{Cancelled, InFlight, Open, Order},
-    ClientOrderId,
+    AccountEvent, AccountEventKind, ClientOrderId,
 };
 use barter_integration::model::{
     instrument::{symbol::Symbol, Instrument},
@@ -24,10 +21,10 @@ impl<Strategy> Cerebrum<AccountUpdater, Strategy> {
     pub fn update(mut self, account: AccountEvent) -> Engine<Strategy> {
         // Update Positions, Statistics, Indicators
         match account.kind {
-            AccountEventKind::ConnectionStatus(status) => {
-                info!(kind = "Account", exchange = ?account.exchange, payload = ?status, "received Event");
-                // Todo: React to ConnectionStatus
-            }
+            // AccountEventKind::ConnectionStatus(status) => {
+            //     info!(kind = "Account", exchange = ?account.exchange, payload = ?status, "received Event");
+            //     // Todo: React to ConnectionStatus
+            // }
             AccountEventKind::Balance(balance) => {
                 info!(kind = "Account", exchange = ?account.exchange, payload = ?balance, "received Event");
                 self.accounts.update_balance(&account.exchange, &balance);
@@ -38,18 +35,20 @@ impl<Strategy> Cerebrum<AccountUpdater, Strategy> {
             }
 
             AccountEventKind::OrdersOpen(orders) => {
-                info!(kind = "Account", exchange = ?account.exchange, payload = "OrdersNew", "received Event");
+                info!(kind = "Account", exchange = ?account.exchange, payload = "OrdersOpen", "received Event");
                 orders
                     .iter()
                     .for_each(|order| self.accounts.update_orders_from_open(&order));
             }
 
-            // TODO: do we need this?
+            // TODO: do we need to treat OrdersNew differently to OrdersOpen?
+            // inflight vs open?
             AccountEventKind::OrdersNew(orders) => {
                 info!(kind = "Account", exchange = ?account.exchange, payload = "OrdersNew", "received Event");
-                orders.iter().for_each(|order| {
-                    self.accounts.update_order_from_new(&order);
-                });
+                orders
+                    .iter()
+                    .for_each(|order| self.accounts.update_orders_from_open(&order));
+                // .for_each(|order| self.accounts.update_order_from_new(&order));
             }
 
             AccountEventKind::OrdersCancelled(cancelled) => {
@@ -62,10 +61,9 @@ impl<Strategy> Cerebrum<AccountUpdater, Strategy> {
             AccountEventKind::Trade(trade) => {
                 info!(kind = "Account", exchange = ?account.exchange, instrument = %trade.instrument, payload = ?trade, "received Event");
                 // Todo: React to Trade... check for fully filled Orders, see update_from_fill(), etc.
-            }
-            AccountEventKind::ExecutionError(error) => {
-                error!(kind = "Account", exchange = ?account.exchange, payload = ?error, "received Event");
-            }
+            } // AccountEventKind::ExecutionError(error) => {
+              //     error!(kind = "Account", exchange = ?account.exchange, payload = ?error, "received Event");
+              // }
         };
 
         Engine::Consumer(Cerebrum::from(self))
@@ -126,6 +124,7 @@ impl Accounts {
         // Todo: Update relevant Positions
     }
 
+    // Todo: refactor this if we don't use in_flight
     pub fn update_order_from_new(&mut self, order: &Order<InFlight>) {
         // Exchange Account associated with the Order
         let account = self.account(&order.exchange);
@@ -160,6 +159,7 @@ impl Accounts {
     ///
     /// **Notes:**
     ///  - Expect that the [`Order<Open>`] is in the orders_in_flight HashMap.
+    /// Todo: refactor this if we don't use in_flight
     pub fn update_orders_from_open(&mut self, order: &Order<Open>) {
         // Exchange Account associated with the Order
         let account = self.account(&order.exchange);

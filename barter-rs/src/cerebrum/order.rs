@@ -1,4 +1,6 @@
-use super::{consume::Consumer, exchange::ExecutionRequest, Cerebrum, Engine};
+use barter_execution::model::execution_event::ExecutionRequest;
+
+use super::{consume::Consumer, Cerebrum, Engine};
 
 /// OrderGenerator can transition to:
 ///  a) Consumer

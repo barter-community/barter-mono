@@ -31,11 +31,10 @@ use crate::{
 };
 use async_trait::async_trait;
 use barter_integration::model::Exchange;
-use fill::FillEvent;
-use model::{execution_event::ExchangeRequest, order_event::OrderEvent, AccountEventKind};
+use model::{execution_event::ExchangeRequest, AccountEventKind};
 use serde::{Deserialize, Serialize};
 use std::fmt::{Display, Formatter};
-use tokio::sync::mpsc::{self, UnboundedReceiver};
+use tokio::sync::mpsc::{self};
 use tracing::error;
 
 // Fill event
@@ -61,6 +60,7 @@ pub mod simulated;
 pub trait ExecutionClient {
     const CLIENT: ExecutionId;
     type Config;
+    type Event: From<AccountEvent> + Send;
 
     /// Initialise a new [`ExecutionClient`] with the provided [`Self::Config`] and
     /// [`AccountEvent`] transmitter.
@@ -68,15 +68,15 @@ pub trait ExecutionClient {
     /// **Note:**
     /// Usually entails spawning an asynchronous WebSocket event loop to consume [`AccountEvent`]s
     /// from the exchange, as well as returning the HTTP client `Self`.
-    async fn init(config: Self::Config, event_tx: mpsc::UnboundedSender<AccountEvent>) -> Self;
-
-    /// Return a [`mpsc::UnboundedSender`] that is used to send [`OrderEvent`]s to the exchange.
-    fn request_tx(&self) -> mpsc::UnboundedSender<ExchangeRequest>;
+    async fn init(config: Self::Config, event_tx: mpsc::UnboundedSender<Self::Event>) -> Self;
 
     /// Return a [`mpsc::UnboundedReceiver`] that is used to receive [`OrderEvent`]s from the
-    fn event_tx(&self) -> mpsc::UnboundedSender<AccountEvent>;
+    fn event_tx(&self) -> &mpsc::UnboundedSender<Self::Event>;
 
-    fn exchange(&self) -> Exchange;
+    /// Return exchange [`Exchange`] identifier.
+    fn exchange(&self) -> Exchange {
+        Exchange::from(Self::CLIENT)
+    }
 
     /// Return a [`FillEvent`] from executing the input [`OrderEvent`].
     // fn generate_fill(&self, order: &OrderEvent) -> Result<FillEvent, ExecutionError>;
@@ -88,6 +88,8 @@ pub trait ExecutionClient {
     async fn fetch_balances(&self) -> Result<Vec<SymbolBalance>, ExecutionError>;
 
     /// Open orders.
+    /// This creates new orders (TODO: rename to new_orders / place_orders?)
+    /// NOTE: some orders like onchain-tx will take a long time to
     async fn open_orders(
         &self,
         open_requests: Vec<Order<RequestOpen>>,
@@ -109,8 +111,8 @@ pub trait ExecutionClient {
             kind,
         };
         // TODO how do we handle a send error?
-        self.event_tx()
-            .send(account_event)
+        (*self.event_tx())
+            .send(Self::Event::from(account_event))
             .expect("Execution engine is offline");
     }
 
