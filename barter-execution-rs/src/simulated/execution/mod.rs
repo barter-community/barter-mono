@@ -1,6 +1,9 @@
+use std::sync::Arc;
+
 use crate::{
     fill::{Fees, FillEvent},
     model::{
+        execution_event::ExchangeRequest,
         order::{Cancelled, Open, Order},
         order_event::OrderEvent,
     },
@@ -9,16 +12,22 @@ use crate::{
     SymbolBalance,
 };
 use async_trait::async_trait;
+use barter_integration::model::Exchange;
 use chrono::Utc;
+use futures::channel::mpsc::UnboundedReceiver;
 use tokio::sync::{mpsc, oneshot};
 
 /// Simulated [`ExecutionClient`] implementation that integrates with the Barter
 /// [`SimulatedExchange`](super::exchange::SimulatedExchange).
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub struct SimulatedExecution {
     /// Simulated fee percentage to be used for each [`Fees`] field in decimal form (eg/ 0.01 for 1%)
     pub fees_pct: Fees,
     pub request_tx: mpsc::UnboundedSender<SimulatedEvent>,
+
+    pub event_tx: mpsc::UnboundedSender<AccountEvent>,
+    pub order_tx: mpsc::UnboundedSender<ExchangeRequest>,
+    pub order_rx: mpsc::UnboundedReceiver<ExchangeRequest>,
 }
 
 /// Config for initializing a [`SimulatedExecution`] instance.
@@ -34,32 +43,44 @@ impl ExecutionClient for SimulatedExecution {
     const CLIENT: ExecutionId = ExecutionId::Simulated;
     type Config = SimulationConfig;
 
-    async fn init(config: Self::Config, _: mpsc::UnboundedSender<AccountEvent>) -> Self {
-        let SimulationConfig {
-            simulated_fees_pct,
-            request_tx,
-        } = config;
+    async fn init(config: Self::Config, event_tx: mpsc::UnboundedSender<AccountEvent>) -> Self {
+        let (order_tx, order_rx) = mpsc::unbounded_channel();
         Self {
-            request_tx,
-            fees_pct: simulated_fees_pct,
+            request_tx: config.request_tx,
+            fees_pct: config.simulated_fees_pct,
+            event_tx,
+            order_tx,
+            order_rx,
         }
     }
 
-    async fn generate_fill(&self, order: &OrderEvent) -> Result<FillEvent, ExecutionError> {
-        // Assume (for now) that all orders are filled at the market price
-        let fill_value_gross = SimulatedExecution::calculate_fill_value_gross(order);
-
-        Ok(FillEvent {
-            time: Utc::now(),
-            exchange: order.exchange.clone(),
-            instrument: order.instrument.clone(),
-            market_meta: order.market_meta,
-            decision: order.decision,
-            quantity: order.quantity,
-            fill_value_gross,
-            fees: self.calculate_fees(&fill_value_gross),
-        })
+    fn request_tx(&self) -> mpsc::UnboundedSender<ExchangeRequest> {
+        self.order_tx.clone()
     }
+
+    fn event_tx(&self) -> mpsc::UnboundedSender<AccountEvent> {
+        self.event_tx.clone()
+    }
+
+    fn exchange(&self) -> Exchange {
+        Exchange::from(ExecutionId::Simulated)
+    }
+
+    // async fn generate_fill(&self, order: &OrderEvent) -> Result<FillEvent, ExecutionError> {
+    //     // Assume (for now) that all orders are filled at the market price
+    //     let fill_value_gross = SimulatedExecution::calculate_fill_value_gross(order);
+
+    //     Ok(FillEvent {
+    //         time: Utc::now(),
+    //         exchange: order.exchange.clone(),
+    //         instrument: order.instrument.clone(),
+    //         market_meta: order.market_meta,
+    //         decision: order.decision,
+    //         quantity: order.quantity,
+    //         fill_value_gross,
+    //         fees: self.calculate_fees(&fill_value_gross),
+    //     })
+    // }
 
     async fn fetch_orders_open(&self) -> Result<Vec<Order<Open>>, ExecutionError> {
         // Oneshot channel to communicate with the SimulatedExchange
@@ -188,39 +209,39 @@ mod tests {
         }
     }
 
-    #[tokio::test]
-    async fn should_generate_ok_fill_event_with_valid_order_event_provided() {
-        let simulated_execution = SimulatedExecution::init(
-            SimulationConfig {
-                simulated_fees_pct: Fees {
-                    exchange: 0.1,
-                    slippage: 0.05,
-                    network: 0.0,
-                },
-                request_tx: mpsc::unbounded_channel().0,
-            },
-            mpsc::unbounded_channel().0,
-        )
-        .await;
+    // #[tokio::test]
+    // async fn should_generate_ok_fill_event_with_valid_order_event_provided() {
+    //     let simulated_execution = SimulatedExecution::init(
+    //         SimulationConfig {
+    //             simulated_fees_pct: Fees {
+    //                 exchange: 0.1,
+    //                 slippage: 0.05,
+    //                 network: 0.0,
+    //             },
+    //             request_tx: mpsc::unbounded_channel().0,
+    //         },
+    //         mpsc::unbounded_channel().0,
+    //     )
+    //     .await;
 
-        let mut input_order = order_event();
-        input_order.quantity = 10.0;
-        input_order.market_meta.close = 10.0;
+    //     let mut input_order = order_event();
+    //     input_order.quantity = 10.0;
+    //     input_order.market_meta.close = 10.0;
 
-        let actual_result = simulated_execution.generate_fill(&input_order).await;
+    //     let actual_result = simulated_execution.generate_fill(&input_order).await;
 
-        let expected_fill_value_gross = 100.0;
-        let expected_fees = Fees {
-            exchange: 10.0,
-            slippage: 5.0,
-            network: 0.0,
-        };
+    //     let expected_fill_value_gross = 100.0;
+    //     let expected_fees = Fees {
+    //         exchange: 10.0,
+    //         slippage: 5.0,
+    //         network: 0.0,
+    //     };
 
-        assert!(actual_result.is_ok());
-        let actual_result = actual_result.unwrap();
-        assert_eq!(actual_result.fill_value_gross, expected_fill_value_gross);
-        assert_eq!(actual_result.fees, expected_fees);
-    }
+    //     assert!(actual_result.is_ok());
+    //     let actual_result = actual_result.unwrap();
+    //     assert_eq!(actual_result.fill_value_gross, expected_fill_value_gross);
+    //     assert_eq!(actual_result.fees, expected_fees);
+    // }
 
     #[test]
     fn should_calculate_fill_value_gross_correctly() {

@@ -207,6 +207,8 @@
 #![allow(clippy::type_complexity)]
 #![allow(clippy::module_inception)]
 
+pub mod cerebrum;
+
 /// Defines a MarketEvent, and provides the Continuer and MarketGenerator traits for
 /// handling the generation of them. Contains implementations such as the (tick-by_tick)
 /// LiveTradeHandler, and HistoricalCandleHandler that generates a market feed and acts as the

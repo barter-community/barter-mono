@@ -1,4 +1,10 @@
+use std::collections::HashMap;
+
 use async_trait::async_trait;
+use barter_integration::model::{
+    instrument::{symbol::Symbol, Instrument},
+    Exchange,
+};
 use chrono::Utc;
 use tokio::sync::mpsc;
 
@@ -7,6 +13,7 @@ use crate::{
     fill::{Fees, FillEvent},
     model::{
         balance::SymbolBalance,
+        execution_event::ExchangeRequest,
         order::{Cancelled, Open, Order, RequestCancel, RequestOpen},
         order_event::OrderEvent,
         AccountEvent,
@@ -27,7 +34,10 @@ pub mod requests;
 #[derive(Debug)]
 pub struct BinanceExecution {
     client: BinanceClient,
+    instruments_map: HashMap<BinancePair, Instrument>,
     // client_type: BinanceApi,
+    pub event_tx: mpsc::UnboundedSender<AccountEvent>,
+    pub order_tx: mpsc::UnboundedSender<ExchangeRequest>,
 }
 
 /// Config for initializing a [`SimulatedExecution`] instance.
@@ -35,6 +45,7 @@ pub struct BinanceExecution {
 pub struct BinanceConfig {
     client: BinanceClient,
     client_type: BinanceApi,
+    instruments: Vec<Instrument>,
 }
 
 #[async_trait]
@@ -42,32 +53,47 @@ impl ExecutionClient for BinanceExecution {
     const CLIENT: ExecutionId = ExecutionId::Simulated;
     type Config = BinanceConfig;
 
-    async fn init(config: Self::Config, _: mpsc::UnboundedSender<AccountEvent>) -> Self {
+    async fn init(config: Self::Config, event_tx: mpsc::UnboundedSender<AccountEvent>) -> Self {
+        let (order_tx, order_rx) = mpsc::unbounded_channel();
         Self {
             client: config.client,
-            // client_type: config.client_type,
+            instruments_map: Self::instruments_map(config.instruments),
+            event_tx, // client_type: config.client_type,
+            order_tx: config.order_tx,
         }
     }
 
-    async fn generate_fill(&self, order: &OrderEvent) -> Result<FillEvent, ExecutionError> {
-        let result: FutOrderResponse = self.client.submit_order(order).await?;
-
-        Ok(FillEvent {
-            time: Utc::now(),
-            exchange: order.exchange.clone(),
-            instrument: order.instrument.clone(),
-            market_meta: order.market_meta,
-            decision: order.decision,
-            quantity: order.quantity,
-            fill_value_gross: result.cumQty,
-            // TODO: compute fees
-            fees: Fees {
-                exchange: 0.0,
-                slippage: 0.0,
-                network: 0.0,
-            },
-        })
+    fn request_tx(&self) -> mpsc::UnboundedSender<ExchangeRequest> {
+        self.order_tx.clone()
     }
+
+    fn event_tx(&self) -> mpsc::UnboundedSender<AccountEvent> {
+        self.event_tx.clone()
+    }
+
+    fn exchange(&self) -> Exchange {
+        Exchange::from(ExecutionId::Binance)
+    }
+
+    // async fn generate_fill(&self, order: &OrderEvent) -> Result<FillEvent, ExecutionError> {
+    //     let result: FutOrderResponse = self.client.submit_order(order).await?;
+
+    //     Ok(FillEvent {
+    //         time: Utc::now(),
+    //         exchange: order.exchange.clone(),
+    //         instrument: order.instrument.clone(),
+    //         market_meta: order.market_meta,
+    //         decision: order.decision,
+    //         quantity: order.quantity,
+    //         fill_value_gross: result.cumQty,
+    //         // TODO: compute fees
+    //         fees: Fees {
+    //             exchange: 0.0,
+    //             slippage: 0.0,
+    //             network: 0.0,
+    //         },
+    //     })
+    // }
 
     async fn fetch_orders_open(&self) -> Result<Vec<Order<Open>>, ExecutionError> {
         todo!()
@@ -114,5 +140,27 @@ impl ExecutionClient for BinanceExecution {
         // response_rx
         //     .await
         //     .expect("SimulatedExchange is offline - failed to receive CancelOrdersAll response")
+    }
+}
+
+#[derive(Clone, Debug, Hash, Eq, PartialEq)]
+pub struct BinancePair(String);
+
+impl BinancePair {
+    pub fn new(base: &Symbol, quote: &Symbol) -> Self {
+        Self(format!("{base}{quote}").to_uppercase())
+    }
+}
+impl BinanceExecution {
+    fn instruments_map(instruments: Vec<Instrument>) -> HashMap<BinancePair, Instrument> {
+        instruments
+            .into_iter()
+            .map(|instrument| {
+                (
+                    BinancePair::new(&instrument.base, &instrument.quote),
+                    instrument,
+                )
+            })
+            .collect()
     }
 }

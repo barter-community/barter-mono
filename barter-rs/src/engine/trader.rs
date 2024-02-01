@@ -8,10 +8,10 @@ use crate::{
 use barter_data::event::{DataKind, MarketEvent};
 use barter_execution::ExecutionClient;
 use barter_integration::model::Market;
-// use parking_lot::Mutex;
+use parking_lot::Mutex;
 use serde::Serialize;
 use std::{collections::VecDeque, fmt::Debug, marker::PhantomData, sync::Arc};
-use tokio::sync::{mpsc, Mutex};
+use tokio::sync::mpsc;
 use tracing::{debug, info, warn};
 use uuid::Uuid;
 
@@ -126,7 +126,7 @@ where
     /// Run the trading event-loop for this [`Trader`] instance. Loop will run until [`Trader`]
     /// receives a [`Command::Terminate`] via the mpsc::Receiver command_rx, or the
     /// [`MarketGenerator`] yields [`Feed::Finished`].
-    pub async fn run(mut self) {
+    pub fn run(mut self) {
         // Run trading loop for this Trader instance
         'trading: loop {
             // Check for new remote Commands before continuing to generate another MarketEvent
@@ -180,7 +180,6 @@ where
                         if let Some(position_update) = self
                             .portfolio
                             .lock()
-                            .await
                             .update_from_market(&market)
                             .expect("failed to update Portfolio from market")
                         {
@@ -192,7 +191,6 @@ where
                         if let Some(order) = self
                             .portfolio
                             .lock()
-                            .await
                             .generate_order(&signal)
                             .expect("failed to generate order")
                         {
@@ -205,7 +203,6 @@ where
                         if let Some(order) = self
                             .portfolio
                             .lock()
-                            .await
                             .generate_exit_order(signal_force_exit)
                             .expect("failed to generate forced exit order")
                         {
@@ -215,20 +212,19 @@ where
                     }
 
                     Event::OrderNew(order) => {
-                        let fill = self
-                            .execution
-                            .generate_fill(&order)
-                            .expect("failed to generate Fill");
+                        // let fill = self
+                        //     .execution
+                        //     .generate_fill(&order)
+                        //     .expect("failed to generate Fill");
 
-                        self.event_tx.send(Event::Fill(fill.clone()));
-                        self.event_q.push_back(Event::Fill(fill));
+                        // self.event_tx.send(Event::Fill(fill.clone()));
+                        // self.event_q.push_back(Event::Fill(fill));
                     }
 
                     Event::Fill(fill) => {
                         let fill_side_effect_events = self
                             .portfolio
                             .lock()
-                            .await
                             .update_from_fill(&fill)
                             .expect("failed to update Portfolio from fill");
 

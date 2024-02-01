@@ -32,10 +32,11 @@ use crate::{
 use async_trait::async_trait;
 use barter_integration::model::Exchange;
 use fill::FillEvent;
-use model::order_event::OrderEvent;
+use model::{execution_event::ExchangeRequest, order_event::OrderEvent, AccountEventKind};
 use serde::{Deserialize, Serialize};
 use std::fmt::{Display, Formatter};
-use tokio::sync::mpsc;
+use tokio::sync::mpsc::{self, UnboundedReceiver};
+use tracing::error;
 
 // Fill event
 pub mod fill;
@@ -69,8 +70,16 @@ pub trait ExecutionClient {
     /// from the exchange, as well as returning the HTTP client `Self`.
     async fn init(config: Self::Config, event_tx: mpsc::UnboundedSender<AccountEvent>) -> Self;
 
+    /// Return a [`mpsc::UnboundedSender`] that is used to send [`OrderEvent`]s to the exchange.
+    fn request_tx(&self) -> mpsc::UnboundedSender<ExchangeRequest>;
+
+    /// Return a [`mpsc::UnboundedReceiver`] that is used to receive [`OrderEvent`]s from the
+    fn event_tx(&self) -> mpsc::UnboundedSender<AccountEvent>;
+
+    fn exchange(&self) -> Exchange;
+
     /// Return a [`FillEvent`] from executing the input [`OrderEvent`].
-    async fn generate_fill(&self, order: &OrderEvent) -> Result<FillEvent, ExecutionError>;
+    // fn generate_fill(&self, order: &OrderEvent) -> Result<FillEvent, ExecutionError>;
 
     /// Fetch account [`Order<Open>`]s.
     async fn fetch_orders_open(&self) -> Result<Vec<Order<Open>>, ExecutionError>;
@@ -92,6 +101,73 @@ pub trait ExecutionClient {
 
     /// Cancel all account [`Order<Open>`]s.
     async fn cancel_orders_all(&self) -> Result<Vec<Order<Cancelled>>, ExecutionError>;
+
+    fn send_account_tx(&self, kind: AccountEventKind) {
+        let account_event = AccountEvent {
+            exchange: self.exchange(),
+            received_time: chrono::Utc::now(),
+            kind,
+        };
+        // TODO how do we handle a send error?
+        self.event_tx()
+            .send(account_event)
+            .expect("Execution engine is offline");
+    }
+
+    async fn run(&self, mut request_rx: mpsc::UnboundedReceiver<ExchangeRequest>) {
+        // TODO: better handling of errors?
+        while let Some(orders) = request_rx.recv().await {
+            match orders {
+                ExchangeRequest::OpenOrders(orders) => {
+                    let open_orders = self.open_orders(orders).await;
+                    let open_orders = filter_responses(open_orders);
+
+                    let account_event = AccountEventKind::OrdersNew(open_orders);
+                    self.send_account_tx(account_event);
+                }
+                ExchangeRequest::CancelOrders(order_events) => {
+                    let cancelled_orders = self.cancel_orders(order_events).await;
+                    let cancelled_orders = filter_responses(cancelled_orders);
+
+                    let account_event = AccountEventKind::OrdersCancelled(cancelled_orders);
+                    self.send_account_tx(account_event);
+                }
+                ExchangeRequest::CancelOrdersAll => {
+                    match self.cancel_orders_all().await {
+                        Ok(orders) => {
+                            self.send_account_tx(AccountEventKind::OrdersCancelled(orders))
+                        }
+                        Err(e) => error!(error = ?e, "failed to cancel all orders"),
+                    };
+                }
+                ExchangeRequest::FetchOrdersOpen => {
+                    match self.fetch_orders_open().await {
+                        Ok(orders) => self.send_account_tx(AccountEventKind::OrdersOpen(orders)),
+                        Err(e) => error!(error = ?e, "failed to fetch open orders"),
+                    };
+                }
+                ExchangeRequest::FetchBalances => {
+                    match self.fetch_balances().await {
+                        Ok(balances) => self.send_account_tx(AccountEventKind::Balances(balances)),
+                        Err(e) => error!(error = ?e, "failed to fetch balances"),
+                    };
+                }
+            }
+        }
+    }
+}
+
+pub fn filter_responses<T>(responses: Vec<Result<T, ExecutionError>>) -> Vec<T> {
+    responses
+        .into_iter()
+        .filter_map(|response| match response {
+            Ok(response) => Some(response),
+            Err(e) => {
+                error!(error = ?e, "failed to submit an order");
+                None
+            }
+        })
+        .collect::<Vec<T>>()
 }
 
 /// Unique identifier for an [`ExecutionClient`] implementation.
@@ -99,7 +175,7 @@ pub trait ExecutionClient {
 #[serde(rename = "execution", rename_all = "snake_case")]
 pub enum ExecutionId {
     Simulated,
-    Ftx,
+    Binance,
 }
 
 impl From<ExecutionId> for Exchange {
@@ -118,7 +194,7 @@ impl ExecutionId {
     pub fn as_str(&self) -> &'static str {
         match self {
             ExecutionId::Simulated => "simulated",
-            ExecutionId::Ftx => "ftx",
+            ExecutionId::Binance => "binance",
         }
     }
 }

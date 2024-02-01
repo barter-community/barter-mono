@@ -10,6 +10,7 @@ use std::fmt::Formatter;
 use uuid::Uuid;
 
 pub mod balance;
+pub mod execution_event;
 pub mod order;
 pub mod order_event;
 pub mod trade;
