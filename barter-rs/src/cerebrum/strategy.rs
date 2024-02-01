@@ -11,8 +11,8 @@ pub trait IndicatorUpdater {
 //  - Do I want two seperate states, one for generate_cancel(), one for generate_orders()?
 
 pub trait OrderGenerator {
-    fn generate_cancels(&self) -> Option<Vec<(Exchange, Vec<Order<RequestCancel>>)>>;
-    fn generate_orders(&self) -> Option<Vec<(Exchange, Vec<Order<RequestOpen>>)>>;
+    fn generate_cancels(&mut self) -> Option<Vec<(Exchange, Vec<Order<RequestCancel>>)>>;
+    fn generate_orders(&mut self) -> Option<Vec<(Exchange, Vec<Order<RequestOpen>>)>>;
 }
 
 // Todo: What does the Strategy do?

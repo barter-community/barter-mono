@@ -11,7 +11,8 @@ use barter_execution::{
     model::{
         balance::Balance,
         execution_event::ExecutionRequest,
-        order::{Order, RequestCancel, RequestOpen},
+        order::{Order, OrderKind, RequestCancel, RequestOpen},
+        ClientOrderId,
     },
     simulated::execution::SimulationConfig,
     ExecutionId,
@@ -32,13 +33,14 @@ use barter_data::{
 };
 use barter_integration::model::{
     instrument::{kind::InstrumentKind, Instrument},
-    Exchange,
+    Exchange, Side,
 };
 use std::ops::Add;
 use std::{collections::HashMap, time::Duration};
 use tokio::sync::mpsc;
 
 struct StrategyExample {
+    counter: usize,
     // rsi: ta::indicators::RelativeStrengthIndex,
 }
 
@@ -53,12 +55,47 @@ impl IndicatorUpdater for StrategyExample {
 }
 
 impl strategy::OrderGenerator for StrategyExample {
-    fn generate_cancels(&self) -> Option<Vec<(Exchange, Vec<Order<RequestCancel>>)>> {
+    fn generate_cancels(&mut self) -> Option<Vec<(Exchange, Vec<Order<RequestCancel>>)>> {
         None
     }
 
-    fn generate_orders(&self) -> Option<Vec<(Exchange, Vec<Order<RequestOpen>>)>> {
-        None
+    fn generate_orders(&mut self) -> Option<Vec<(Exchange, Vec<Order<RequestOpen>>)>> {
+        if self.counter > 10 {
+            return None;
+        }
+        let order = order_request_limit(
+            Instrument::new("btc", "usdt", InstrumentKind::Perpetual),
+            ClientOrderId(uuid::Uuid::new_v4()),
+            Side::Buy,
+            10000.0,
+            0.001,
+        );
+        self.counter += 1;
+        Some(vec![(Exchange::from(ExecutionId::Simulated), vec![order])])
+    }
+}
+
+// Utility for creating an Open Order request
+fn order_request_limit<I>(
+    instrument: I,
+    cid: ClientOrderId,
+    side: Side,
+    price: f64,
+    quantity: f64,
+) -> Order<RequestOpen>
+where
+    I: Into<Instrument>,
+{
+    Order {
+        exchange: Exchange::from(ExecutionId::Simulated),
+        instrument: instrument.into(),
+        cid,
+        side,
+        state: RequestOpen {
+            kind: OrderKind::Limit,
+            price,
+            quantity,
+        },
     }
 }
 
@@ -88,7 +125,7 @@ async fn main() {
     let subscriptions = init_market_feed(event_tx.clone()).await;
 
     // EventFeed Component: AccountFeed:
-    init_account_feed(event_tx.clone(), exchange_rx);
+    init_account_feed(event_tx.clone(), exchange_rx).await;
 
     // EventFeed Component: CommandFeed
     init_command_feed(event_tx, terminate);
@@ -100,6 +137,7 @@ async fn main() {
 
     // StrategyExample
     let strategy = StrategyExample {
+        counter: 0,
         // rsi: ta::indicators::RelativeStrengthIndex::new(14).unwrap(),
     };
 
@@ -192,7 +230,7 @@ where
 
 // Todo:
 //  - Will change when we setup the ExchangeClients properly, likely needs Vec<Instrument>
-fn init_account_feed(
+async fn init_account_feed(
     event_tx: mpsc::UnboundedSender<Event>,
     exchange_rx: mpsc::UnboundedReceiver<ExecutionRequest>,
 ) {
@@ -206,11 +244,11 @@ fn init_account_feed(
         request_tx: mpsc::unbounded_channel().0,
     };
     exchanges.insert(ExecutionId::Simulated, ClientId::Simulated(sim_config));
+    let ex_portal = ExchangePortal::init(exchanges, exchange_rx, event_tx)
+        .await
+        .expect("failed to init ExchangePortal");
 
     tokio::spawn(async move {
-        let ex_portal = ExchangePortal::init(exchanges, exchange_rx, event_tx)
-            .await
-            .expect("failed to init ExchangePortal");
         ex_portal.run();
     });
 }

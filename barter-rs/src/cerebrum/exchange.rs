@@ -47,13 +47,15 @@ impl ExchangePortal {
 
         let mut clients = HashMap::new();
 
+        info!("initializing ExchangePortal {:?}", exchanges);
+
         for (execution_id, client_id) in exchanges.iter() {
             match client_id {
                 ClientId::Simulated(config) => {
                     let (execution_tx, execution_rx) = mpsc::unbounded_channel();
                     let client = SimulatedExecution::init(config.clone(), event_tx.clone()).await;
                     clients.insert(Exchange::from(execution_id.clone()), execution_tx);
-                    tokio::spawn(async move {
+                    tokio::task::spawn(async move {
                         client.run(execution_rx).await;
                     });
                 }
@@ -89,7 +91,7 @@ impl ExchangePortal {
                 Err(mpsc::error::TryRecvError::Empty) => continue,
                 Err(mpsc::error::TryRecvError::Disconnected) => panic!("todo"),
             };
-            info!(payload = ?request, "received ExchangeRequest");
+            // info!(payload = ?request, "received ExchangeRequest");
 
             // Action ExecutionRequest
             match request {
@@ -108,7 +110,10 @@ impl ExchangePortal {
                 ExecutionRequest::OpenOrders(open_requests) => {
                     open_requests.into_iter().for_each(|open_request| {
                         let client = self.client(&open_request.0);
-                        (*client).send(ExchangeRequest::OpenOrders(open_request.1));
+                        info!("sending OpenOrders ");
+                        (*client)
+                            .send(ExchangeRequest::OpenOrders(open_request.1))
+                            .expect("failed to send OpenOrders to ExchangeClient");
                     });
                 }
                 ExecutionRequest::CancelOrders(cancel_requests) => {

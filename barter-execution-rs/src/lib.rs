@@ -35,7 +35,7 @@ use model::{execution_event::ExchangeRequest, AccountEventKind};
 use serde::{Deserialize, Serialize};
 use std::fmt::{Display, Formatter};
 use tokio::sync::mpsc::{self};
-use tracing::error;
+use tracing::{error, info};
 
 // Fill event
 pub mod fill;
@@ -119,6 +119,9 @@ pub trait ExecutionClient {
     async fn run(&self, mut request_rx: mpsc::UnboundedReceiver<ExchangeRequest>) {
         // TODO: better handling of errors?
         while let Some(orders) = request_rx.recv().await {
+            // println!("running XXX");
+            // info!(payload = ?orders, "received XXX");
+
             match orders {
                 ExchangeRequest::OpenOrders(orders) => {
                     let open_orders = self.open_orders(orders).await;
@@ -156,6 +159,7 @@ pub trait ExecutionClient {
                 }
             }
         }
+        info!("DONE XXX");
     }
 }
 
