@@ -33,8 +33,14 @@ use async_trait::async_trait;
 use barter_integration::model::Exchange;
 use model::{execution_event::ExchangeRequest, AccountEventKind};
 use serde::{Deserialize, Serialize};
-use std::fmt::{Display, Formatter};
-use tokio::sync::mpsc::{self};
+use std::{
+    fmt::{Display, Formatter},
+    time::Duration,
+};
+use tokio::{
+    sync::mpsc::{self},
+    time::{interval, sleep},
+};
 use tracing::{error, info};
 
 // Fill event
@@ -117,10 +123,33 @@ pub trait ExecutionClient {
     }
 
     async fn run(&self, mut request_rx: mpsc::UnboundedReceiver<ExchangeRequest>) {
-        // TODO: better handling of errors?
-        while let Some(orders) = request_rx.recv().await {
+        // loop {
+        //     let orders = match request_rx.try_recv() {
+        //         Ok(request) => request,
+        //         Err(mpsc::error::TryRecvError::Empty) => continue,
+        //         Err(mpsc::error::TryRecvError::Disconnected) => panic!("todo"),
+        //     };
+        loop {
+            let orders = request_rx.recv().await;
+
+            let orders = match orders {
+                None => {
+                    info!("received None");
+                    continue;
+                }
+                Some(orders) => orders,
+            };
+
+            // let orders = match request_rx.try_recv() {
+            //     Ok(request) => request,
+            //     Err(mpsc::error::TryRecvError::Empty) => continue,
+            //     Err(mpsc::error::TryRecvError::Disconnected) => panic!("todo"),
+            // };
+
+            // TODO: better handling of errors?
+            // while let Some(orders) = request_rx.recv().await {
             // println!("running XXX");
-            // info!(payload = ?orders, "received XXX");
+            info!(payload = ?orders, "received XXX");
 
             match orders {
                 ExchangeRequest::OpenOrders(orders) => {
@@ -158,6 +187,7 @@ pub trait ExecutionClient {
                     };
                 }
             }
+            // }
         }
         info!("DONE XXX");
     }

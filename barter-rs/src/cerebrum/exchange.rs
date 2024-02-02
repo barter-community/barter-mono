@@ -8,7 +8,9 @@ use barter_execution::{
 };
 use barter_integration::model::Exchange;
 use std::collections::HashMap;
+use std::time::Duration;
 use tokio::sync::mpsc;
+use tokio::time::sleep;
 use tracing::info;
 
 /// Responsibilities:
@@ -91,6 +93,7 @@ impl ExchangePortal {
                 Err(mpsc::error::TryRecvError::Empty) => continue,
                 Err(mpsc::error::TryRecvError::Disconnected) => panic!("todo"),
             };
+            // while let Some(request) = self.request_rx.recv().await {
             // info!(payload = ?request, "received ExchangeRequest");
 
             // Action ExecutionRequest
@@ -98,13 +101,17 @@ impl ExchangePortal {
                 ExecutionRequest::FetchOrdersOpen(exchanges) => {
                     exchanges.into_iter().for_each(|exchange| {
                         let client = self.client(&exchange);
-                        (*client).send(ExchangeRequest::FetchOrdersOpen);
+                        (*client)
+                            .send(ExchangeRequest::FetchOrdersOpen)
+                            .expect("failed to send FetchOrdersOpen to ExchangeClient");
                     });
                 }
                 ExecutionRequest::FetchBalances(exchanges) => {
                     exchanges.into_iter().for_each(|exchange| {
                         let client = self.client(&exchange);
-                        (*client).send(ExchangeRequest::FetchBalances);
+                        (*client)
+                            .send(ExchangeRequest::FetchBalances)
+                            .expect("failed to send FetchBalances to ExchangeClient");
                     });
                 }
                 ExecutionRequest::OpenOrders(open_requests) => {
@@ -119,13 +126,17 @@ impl ExchangePortal {
                 ExecutionRequest::CancelOrders(cancel_requests) => {
                     cancel_requests.into_iter().for_each(|cancel_request| {
                         let client = self.client(&cancel_request.0);
-                        (*client).send(ExchangeRequest::CancelOrders(cancel_request.1));
+                        (*client)
+                            .send(ExchangeRequest::CancelOrders(cancel_request.1))
+                            .expect("failed to send CancelOrders to ExchangeClient");
                     });
                 }
                 ExecutionRequest::CancelOrdersAll(exchanges) => {
                     exchanges.into_iter().for_each(|exchange| {
                         let client = self.client(&exchange);
-                        (*client).send(ExchangeRequest::CancelOrdersAll);
+                        (*client)
+                            .send(ExchangeRequest::CancelOrdersAll)
+                            .expect("failed to send CancelOrdersAll to ExchangeClient");
                     });
                 }
             }

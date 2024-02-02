@@ -14,7 +14,7 @@ use barter_execution::{
         order::{Order, OrderKind, RequestCancel, RequestOpen},
         ClientOrderId,
     },
-    simulated::execution::SimulationConfig,
+    simulated::{execution::SimulationConfig, util::run_default_exchange, SimulatedEvent},
     ExecutionId,
 };
 use dotenv::dotenv;
@@ -124,8 +124,14 @@ async fn main() {
     // EventFeed Component: MarketFeed:
     let subscriptions = init_market_feed(event_tx.clone()).await;
 
+    let (event_simulated_tx, event_simulated_rx) = mpsc::unbounded_channel();
+    let (execution_tx, _execution_rx) = mpsc::unbounded_channel();
+
+    // Build SimulatedExchange & run on it's own Tokio task
+    tokio::spawn(run_default_exchange(execution_tx, event_simulated_rx));
+
     // EventFeed Component: AccountFeed:
-    init_account_feed(event_tx.clone(), exchange_rx).await;
+    init_account_feed(event_tx.clone(), exchange_rx, event_simulated_tx).await;
 
     // EventFeed Component: CommandFeed
     init_command_feed(event_tx, terminate);
@@ -152,11 +158,11 @@ async fn main() {
         .expect("failed to build Engine");
 
     // Run Engine
-    // std::thread::spawn(move || engine.run());
+    std::thread::spawn(move || engine.run());
 
-    tokio::task::spawn(async move { engine.run() })
-        .await
-        .unwrap();
+    // tokio::spawn(async move { engine.run().await })
+    //     .await
+    //     .unwrap();
 
     tokio::time::sleep(terminate.add(Duration::from_secs(1))).await
 }
@@ -207,7 +213,6 @@ where
     });
 
     // is separate thread necessary here?
-
     // std::thread::spawn(move || loop {
     //     match market_rx.try_recv() {
     //         Ok(trade) => event_tx
@@ -233,6 +238,7 @@ where
 async fn init_account_feed(
     event_tx: mpsc::UnboundedSender<Event>,
     exchange_rx: mpsc::UnboundedReceiver<ExecutionRequest>,
+    event_simulated_tx: mpsc::UnboundedSender<SimulatedEvent>,
 ) {
     let mut exchanges = HashMap::new();
     let sim_config = SimulationConfig {
@@ -241,14 +247,19 @@ async fn init_account_feed(
             slippage: 0.05,
             network: 0.0,
         },
-        request_tx: mpsc::unbounded_channel().0,
+        request_tx: event_simulated_tx,
     };
     exchanges.insert(ExecutionId::Simulated, ClientId::Simulated(sim_config));
     let ex_portal = ExchangePortal::init(exchanges, exchange_rx, event_tx)
         .await
         .expect("failed to init ExchangePortal");
 
-    tokio::spawn(async move {
+    // tokio::spawn(async move {
+    //     ex_portal.run().await;
+    // });
+
+    // alternately we can spawn sync thread
+    std::thread::spawn(move || {
         ex_portal.run();
     });
 }
@@ -267,13 +278,18 @@ fn init_accounts<Ex, Kind>(
 where
     Exchange: Eq + std::hash::Hash,
 {
-    let instruments = subscriptions
+    let instruments: Vec<Instrument> = subscriptions
         .into_iter()
         .map(|subscription| subscription.instrument)
         .collect();
 
     let mut accounts = HashMap::new();
-    accounts.insert(exchange, init_account(instruments));
+    accounts.insert(exchange, init_account(instruments.clone()));
+    // we need to init instruments for simulated exchange
+    accounts.insert(
+        Exchange::from(ExecutionId::Simulated),
+        init_account(instruments),
+    );
     Accounts(accounts)
 }
 

@@ -1,8 +1,8 @@
-use crate::util::{
-    fees_50_percent, initial_balances, latency_50ms, open_order, order_cancel_request,
-    order_cancelled, order_request_limit, run_default_exchange,
-};
+use crate::util::{open_order, order_cancel_request, order_cancelled, order_request_limit};
 use barter_data::subscription::trade::PublicTrade;
+use barter_execution::simulated::util::{
+    fees_50_percent, initial_balances, latency_50ms, run_default_exchange,
+};
 use barter_execution::{
     error::ExecutionError,
     fill::Fees,

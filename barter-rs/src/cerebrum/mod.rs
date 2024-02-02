@@ -12,7 +12,7 @@ use self::{
 use crate::engine::error::EngineError;
 use barter_data::event::{DataKind, MarketEvent};
 use barter_execution::model::{execution_event::ExecutionRequest, AccountEvent};
-use tokio::sync::mpsc;
+use tokio::{sync::mpsc, task::yield_now};
 
 pub mod account;
 pub mod command;
@@ -117,6 +117,9 @@ where
         EngineBuilder::new()
     }
 
+    /// Main event loop
+    /// Todo: worth it to explore whether it makes sense run this as part of tokio runtime
+    /// this would require a yield_now() in the loop to make space for other tasks
     pub fn run(mut self) {
         'trading: loop {
             // Transition to the next trading state
