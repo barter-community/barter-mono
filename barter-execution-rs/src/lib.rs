@@ -26,22 +26,12 @@ use crate::{
     model::{
         balance::SymbolBalance,
         order::{Cancelled, Open, Order, OrderId, RequestCancel, RequestOpen},
-        AccountEvent,
     },
 };
 use async_trait::async_trait;
 use barter_integration::model::Exchange;
-use model::{execution_event::ExchangeRequest, AccountEventKind};
 use serde::{Deserialize, Serialize};
-use std::{
-    fmt::{Display, Formatter},
-    time::Duration,
-};
-use tokio::{
-    sync::mpsc::{self},
-    time::{interval, sleep},
-};
-use tracing::{error, info};
+use std::fmt::{Display, Formatter};
 
 // Fill event
 pub mod fill;
@@ -62,11 +52,13 @@ pub mod simulated;
 
 /// Defines the communication with the exchange. Each exchange integration requires it's own
 /// implementation.
+// Todo: implement fill event?
 #[async_trait]
 pub trait ExecutionClient {
-    const CLIENT: ExecutionId;
     type Config;
-    type Event: From<AccountEvent> + Send;
+
+    /// Return exchange [`Exchange`] identifier.
+    fn exchange(&self) -> Exchange;
 
     /// Initialise a new [`ExecutionClient`] with the provided [`Self::Config`] and
     /// [`AccountEvent`] transmitter.
@@ -74,15 +66,7 @@ pub trait ExecutionClient {
     /// **Note:**
     /// Usually entails spawning an asynchronous WebSocket event loop to consume [`AccountEvent`]s
     /// from the exchange, as well as returning the HTTP client `Self`.
-    async fn init(config: Self::Config, event_tx: mpsc::UnboundedSender<Self::Event>) -> Self;
-
-    /// Return a [`mpsc::UnboundedReceiver`] that is used to receive [`OrderEvent`]s from the
-    fn event_tx(&self) -> &mpsc::UnboundedSender<Self::Event>;
-
-    /// Return exchange [`Exchange`] identifier.
-    fn exchange(&self) -> Exchange {
-        Exchange::from(Self::CLIENT)
-    }
+    async fn init(config: Self::Config) -> Self;
 
     /// Return a [`FillEvent`] from executing the input [`OrderEvent`].
     // fn generate_fill(&self, order: &OrderEvent) -> Result<FillEvent, ExecutionError>;
@@ -109,101 +93,6 @@ pub trait ExecutionClient {
 
     /// Cancel all account [`Order<Open>`]s.
     async fn cancel_orders_all(&self) -> Result<Vec<Order<Cancelled>>, ExecutionError>;
-
-    fn send_account_tx(&self, kind: AccountEventKind) {
-        let account_event = AccountEvent {
-            exchange: self.exchange(),
-            received_time: chrono::Utc::now(),
-            kind,
-        };
-        // TODO how do we handle a send error?
-        (*self.event_tx())
-            .send(Self::Event::from(account_event))
-            .expect("Execution engine is offline");
-    }
-
-    async fn run(&self, mut request_rx: mpsc::UnboundedReceiver<ExchangeRequest>) {
-        // loop {
-        //     let orders = match request_rx.try_recv() {
-        //         Ok(request) => request,
-        //         Err(mpsc::error::TryRecvError::Empty) => continue,
-        //         Err(mpsc::error::TryRecvError::Disconnected) => panic!("todo"),
-        //     };
-        loop {
-            let orders = request_rx.recv().await;
-
-            let orders = match orders {
-                None => {
-                    info!("received None");
-                    continue;
-                }
-                Some(orders) => orders,
-            };
-
-            // let orders = match request_rx.try_recv() {
-            //     Ok(request) => request,
-            //     Err(mpsc::error::TryRecvError::Empty) => continue,
-            //     Err(mpsc::error::TryRecvError::Disconnected) => panic!("todo"),
-            // };
-
-            // TODO: better handling of errors?
-            // while let Some(orders) = request_rx.recv().await {
-            // println!("running XXX");
-            info!(payload = ?orders, "received XXX");
-
-            match orders {
-                ExchangeRequest::OpenOrders(orders) => {
-                    let open_orders = self.open_orders(orders).await;
-                    let open_orders = filter_responses(open_orders);
-
-                    let account_event = AccountEventKind::OrdersNew(open_orders);
-                    self.send_account_tx(account_event);
-                }
-                ExchangeRequest::CancelOrders(order_events) => {
-                    let cancelled_orders = self.cancel_orders(order_events).await;
-                    let cancelled_orders = filter_responses(cancelled_orders);
-
-                    let account_event = AccountEventKind::OrdersCancelled(cancelled_orders);
-                    self.send_account_tx(account_event);
-                }
-                ExchangeRequest::CancelOrdersAll => {
-                    match self.cancel_orders_all().await {
-                        Ok(orders) => {
-                            self.send_account_tx(AccountEventKind::OrdersCancelled(orders))
-                        }
-                        Err(e) => error!(error = ?e, "failed to cancel all orders"),
-                    };
-                }
-                ExchangeRequest::FetchOrdersOpen => {
-                    match self.fetch_orders_open().await {
-                        Ok(orders) => self.send_account_tx(AccountEventKind::OrdersOpen(orders)),
-                        Err(e) => error!(error = ?e, "failed to fetch open orders"),
-                    };
-                }
-                ExchangeRequest::FetchBalances => {
-                    match self.fetch_balances().await {
-                        Ok(balances) => self.send_account_tx(AccountEventKind::Balances(balances)),
-                        Err(e) => error!(error = ?e, "failed to fetch balances"),
-                    };
-                }
-            }
-            // }
-        }
-        info!("DONE XXX");
-    }
-}
-
-pub fn filter_responses<T>(responses: Vec<Result<T, ExecutionError>>) -> Vec<T> {
-    responses
-        .into_iter()
-        .filter_map(|response| match response {
-            Ok(response) => Some(response),
-            Err(e) => {
-                error!(error = ?e, "failed to submit an order");
-                None
-            }
-        })
-        .collect::<Vec<T>>()
 }
 
 /// Unique identifier for an [`ExecutionClient`] implementation.

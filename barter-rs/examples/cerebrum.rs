@@ -1,7 +1,8 @@
 use barter::cerebrum::{
     account::{Account, Accounts, Position},
     event::{Command, Event, EventFeed},
-    exchange::{ClientId, ExchangePortal},
+    exchange::ExchangePortal,
+    exchange_client::ClientId,
     strategy,
     strategy::IndicatorUpdater,
     Engine,
@@ -254,14 +255,14 @@ async fn init_account_feed(
         .await
         .expect("failed to init ExchangePortal");
 
-    // tokio::spawn(async move {
-    //     ex_portal.run().await;
-    // });
+    tokio::spawn(async move {
+        ex_portal.run().await;
+    });
 
     // alternately we can spawn sync thread
-    std::thread::spawn(move || {
-        ex_portal.run();
-    });
+    // std::thread::spawn(move || {
+    //     ex_portal.run();
+    // });
 }
 
 fn init_command_feed(event_tx: mpsc::UnboundedSender<Event>, terminate: Duration) {

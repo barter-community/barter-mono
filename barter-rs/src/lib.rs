@@ -157,11 +157,11 @@
 //!     request_tx: mpsc::unbounded_channel().0,
 //! };
 //!
-//! let mut execution = SimulatedExecution::init(config, mpsc::unbounded_channel().0).await;
+//! let mut execution = SimulatedExecution::init(config).await;
 //!
 //! let order_event = test_util::order_event();
 //!
-//! let fill_event = execution.generate_fill(&order_event);
+//! // let fill_event = execution.generate_fill(&order_event);
 //! }
 //! ```
 //!

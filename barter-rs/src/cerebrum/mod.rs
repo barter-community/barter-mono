@@ -12,13 +12,14 @@ use self::{
 use crate::engine::error::EngineError;
 use barter_data::event::{DataKind, MarketEvent};
 use barter_execution::model::{execution_event::ExecutionRequest, AccountEvent};
-use tokio::{sync::mpsc, task::yield_now};
+use tokio::sync::mpsc;
 
 pub mod account;
 pub mod command;
 pub mod consume;
 pub mod event;
 pub mod exchange;
+pub mod exchange_client;
 pub mod initialise;
 pub mod market;
 pub mod order;

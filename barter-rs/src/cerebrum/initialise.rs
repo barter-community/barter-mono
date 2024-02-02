@@ -8,7 +8,7 @@ use super::{consume::Consumer, terminate::Terminated, Cerebrum, Engine};
 pub struct Initialiser;
 
 impl<Strategy> Cerebrum<Initialiser, Strategy> {
-    pub fn init(mut self) -> Engine<Strategy> {
+    pub fn init(self) -> Engine<Strategy> {
         // Todo:
         //  - Or we do we this in the Builder? Perhaps...
         //  - Should this be 'AccountInitialisation'?

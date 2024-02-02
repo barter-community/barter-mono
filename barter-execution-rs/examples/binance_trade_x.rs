@@ -5,7 +5,7 @@ use barter_execution::{
         requests::FutOrderResponse,
     },
     fill::{Decision, MarketMeta},
-    model::order_event::{OrderEventBuilder, OrderExecutionType, OrderType},
+    model::order_event::{OrderEventBuilder, OrderType},
 };
 use barter_integration::model::{
     instrument::{kind::InstrumentKind, Instrument},

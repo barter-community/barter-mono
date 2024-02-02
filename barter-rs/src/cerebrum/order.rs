@@ -39,7 +39,7 @@ where
 }
 
 impl<Strategy> Cerebrum<OrderGenerator<Manual>, Strategy> {
-    pub fn generate_order_requests_manual(self, meta: ()) -> Engine<Strategy> {
+    pub fn generate_order_requests_manual(self, _meta: ()) -> Engine<Strategy> {
         // Todo:
         // 1. Action manual open / cancel order
         Engine::Consumer(Cerebrum::from(self))

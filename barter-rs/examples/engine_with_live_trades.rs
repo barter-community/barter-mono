@@ -83,17 +83,14 @@ async fn main() {
             .data(live::MarketFeed::new(stream_market_event_trades().await))
             .strategy(RSIStrategy::new(StrategyConfig { rsi_period: 14 }))
             .execution(
-                SimulatedExecution::init(
-                    SimulationConfig {
-                        simulated_fees_pct: Fees {
-                            exchange: 0.1,
-                            slippage: 0.05,
-                            network: 0.0,
-                        },
-                        request_tx: mpsc::unbounded_channel().0,
+                SimulatedExecution::init(SimulationConfig {
+                    simulated_fees_pct: Fees {
+                        exchange: 0.1,
+                        slippage: 0.05,
+                        network: 0.0,
                     },
-                    mpsc::unbounded_channel().0,
-                )
+                    request_tx: mpsc::unbounded_channel().0,
+                })
                 .await,
             )
             .build()

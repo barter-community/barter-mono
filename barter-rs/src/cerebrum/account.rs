@@ -120,7 +120,7 @@ impl Accounts {
             .for_each(|balance| self.update_balance(exchange, balance))
     }
 
-    pub fn update_positions(&mut self, market: &MarketEvent<DataKind>) {
+    pub fn update_positions(&mut self, _market: &MarketEvent<DataKind>) {
         // Todo: Update relevant Positions
     }
 

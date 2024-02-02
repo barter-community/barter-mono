@@ -1,24 +1,11 @@
 use barter_execution::{
     model::{
-        balance::Balance,
         order::{Cancelled, Open, Order, OrderId, OrderKind, RequestCancel, RequestOpen},
-        AccountEvent, ClientOrderId,
-    },
-    simulated::{
-        exchange::{
-            account::{balance::ClientBalances, ClientAccount},
-            SimulatedExchange,
-        },
-        SimulatedEvent,
+        ClientOrderId,
     },
     ExecutionId,
 };
-use barter_integration::model::{
-    instrument::{kind::InstrumentKind, symbol::Symbol, Instrument},
-    Exchange, Side,
-};
-use std::{collections::HashMap, time::Duration};
-use tokio::sync::mpsc;
+use barter_integration::model::{instrument::Instrument, Exchange, Side};
 
 // Utility for creating an Open Order request
 pub(super) fn order_request_limit<I>(

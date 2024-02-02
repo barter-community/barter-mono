@@ -1,6 +1,5 @@
 use barter_data::event::{DataKind, MarketEvent};
 use barter_execution::model::AccountEvent;
-use barter_integration::model::{instrument::Instrument, Side};
 use tokio::sync::mpsc;
 
 #[derive(Debug)]
