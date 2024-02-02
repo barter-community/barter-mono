@@ -30,7 +30,9 @@ use crate::{
 };
 use async_trait::async_trait;
 use barter_integration::model::Exchange;
+use execution::binance::{BinanceConfig, BinanceExecution};
 use serde::{Deserialize, Serialize};
+use simulated::execution::{SimulatedExecution, SimulationConfig};
 use std::fmt::{Display, Formatter};
 
 // Fill event
@@ -93,6 +95,21 @@ pub trait ExecutionClient {
 
     /// Cancel all account [`Order<Open>`]s.
     async fn cancel_orders_all(&self) -> Result<Vec<Order<Cancelled>>, ExecutionError>;
+}
+
+// Todo:
+//   - Better name for this? This is the equivilant to ExchangeId...
+//    '--> renamed to ClientId for now to avoid confusion in development
+#[derive(Debug)]
+pub enum ClientId {
+    Simulated(SimulationConfig),
+    Binance(BinanceConfig),
+}
+
+#[derive(Debug)]
+pub enum ExchangeClient {
+    Simulated(SimulatedExecution),
+    Binance(BinanceExecution),
 }
 
 /// Unique identifier for an [`ExecutionClient`] implementation.

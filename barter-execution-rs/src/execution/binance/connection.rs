@@ -331,7 +331,7 @@ mod tests {
                     "cumQty": "0",
                     "cumQuote": "0",
                     "executedQty": "0",
-                    "orderId": "LJ9R4QZDihCaS8UAOOLpgW",
+                    "orderId": 22542179,
                     "avgPrice": "0.00000",
                     "origQty": "10",
                     "price": "0",
