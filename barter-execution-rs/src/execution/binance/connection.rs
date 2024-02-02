@@ -327,32 +327,32 @@ mod tests {
             .with_status(200)
             .with_body(
                 json!({
-                "clientOrderId": "testOrder",
-                "cumQty": "0",
-                "cumQuote": "0",
-                "executedQty": "0",
-                "orderId": 22542179,
-                "avgPrice": "0.00000",
-                "origQty": "10",
-                "price": "0",
-                "reduceOnly": false,
-                "side": "BUY",
-                "positionSide": "SHORT",
-                "status": "NEW",
-                "stopPrice": "9300",        // please ignore when order type is TRAILING_STOP_MARKET
-                "closePosition": false,   // if Close-All
-                "symbol": "ETHUSDT",
-                "timeInForce": "GTD",
-                "type": "TRAILING_STOP_MARKET",
-                "origType": "TRAILING_STOP_MARKET",
-                "activatePrice": "9020",    // activation price, only return with TRAILING_STOP_MARKET order
-                "priceRate": "0.3",         // callback rate, only return with TRAILING_STOP_MARKET order
-                "updateTime": 1566818724722 as u64,
-                "workingType": "CONTRACT_PRICE",
-                "priceProtect": false,      // if conditional order trigger is protected
-                "priceMatch": "NONE",              //price match mode
-                "selfTradePreventionMode": "NONE", //self trading preventation mode
-                "goodTillDate": 1693207680000 as u64
+                    "clientOrderId": "testOrder",
+                    "cumQty": "0",
+                    "cumQuote": "0",
+                    "executedQty": "0",
+                    "orderId": "LJ9R4QZDihCaS8UAOOLpgW",
+                    "avgPrice": "0.00000",
+                    "origQty": "10",
+                    "price": "0",
+                    "reduceOnly": false,
+                    "side": "BUY",
+                    "positionSide": "SHORT",
+                    "status": "NEW",
+                    "stopPrice": "9300",        // please ignore when order type is TRAILING_STOP_MARKET
+                    "closePosition": false,   // if Close-All
+                    "symbol": "ETHUSDT",
+                    "timeInForce": "GTD",
+                    "type": "TRAILING_STOP_MARKET",
+                    "origType": "TRAILING_STOP_MARKET",
+                    "activatePrice": "9020",    // activation price, only return with TRAILING_STOP_MARKET order
+                    "priceRate": "0.3",         // callback rate, only return with TRAILING_STOP_MARKET order
+                    "updateTime": 1566818724722 as u64,
+                    "workingType": "CONTRACT_PRICE",
+                    "priceProtect": false,      // if conditional order trigger is protected
+                    "priceMatch": "NONE",              //price match mode
+                    "selfTradePreventionMode": "NONE", //self trading preventation mode
+                    "goodTillDate": 1693207680000 as u64
                 })
                 .to_string(),
             )
