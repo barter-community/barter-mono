@@ -12,6 +12,7 @@ pub enum InstrumentKind {
     Future(FutureContract),
     Perpetual,
     Option(OptionContract),
+    IntentOrder,
 }
 
 impl Default for InstrumentKind {
@@ -37,6 +38,7 @@ impl Display for InstrumentKind {
                     option.expiry.date_naive(),
                     option.strike,
                 ),
+                InstrumentKind::IntentOrder => "intent_order".to_string(),
             }
         )
     }

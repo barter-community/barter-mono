@@ -36,6 +36,7 @@ impl<GateioExchange> Identifier<GateioChannel> for Subscription<GateioExchange, 
             InstrumentKind::Spot => GateioChannel::SPOT_TRADES,
             InstrumentKind::Future(_) | InstrumentKind::Perpetual => GateioChannel::FUTURE_TRADES,
             InstrumentKind::Option(_) => GateioChannel::OPTION_TRADES,
+            _ => panic!("Unsupported instrument kind"),
         }
     }
 }

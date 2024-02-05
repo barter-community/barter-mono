@@ -252,6 +252,9 @@ impl ExchangeId {
             // Option
             (GateioOptions | Okx, Option(_)) => true,
             (_, Option(_)) => false,
+
+            //  Other / onchian events
+            (_, _) => false,
         }
     }
 }

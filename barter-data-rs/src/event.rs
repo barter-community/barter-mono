@@ -3,6 +3,7 @@ use crate::{
     subscription::{
         book::{OrderBook, OrderBookL1},
         candle::Candle,
+        intent_order::IntentOrder,
         liquidation::Liquidation,
         trade::PublicTrade,
     },
@@ -60,6 +61,7 @@ pub enum DataKind {
     OrderBook(OrderBook),
     Candle(Candle),
     Liquidation(Liquidation),
+    IntentOrder(IntentOrder),
 }
 
 impl From<MarketEvent<PublicTrade>> for MarketEvent<DataKind> {
@@ -118,6 +120,18 @@ impl From<MarketEvent<Liquidation>> for MarketEvent<DataKind> {
             exchange: event.exchange,
             instrument: event.instrument,
             kind: DataKind::Liquidation(event.kind),
+        }
+    }
+}
+
+impl From<&IntentOrder> for MarketEvent<DataKind> {
+    fn from(order: &IntentOrder) -> Self {
+        Self {
+            exchange_time: chrono::Utc::now(),
+            received_time: chrono::Utc::now(),
+            exchange: Exchange::from("IntentOrder"),
+            instrument: order.instrument.clone(),
+            kind: DataKind::IntentOrder(order.clone()),
         }
     }
 }
