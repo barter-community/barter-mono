@@ -211,14 +211,14 @@ where
                         }
                     }
 
-                    Event::OrderNew(order) => {
-                        let fill = self
-                            .execution
-                            .generate_fill(&order)
-                            .expect("failed to generate Fill");
+                    Event::OrderNew(_order) => {
+                        // let fill = self
+                        //     .execution
+                        //     .generate_fill(&order)
+                        //     .expect("failed to generate Fill");
 
-                        self.event_tx.send(Event::Fill(fill.clone()));
-                        self.event_q.push_back(Event::Fill(fill));
+                        // self.event_tx.send(Event::Fill(fill.clone()));
+                        // self.event_q.push_back(Event::Fill(fill));
                     }
 
                     Event::Fill(fill) => {

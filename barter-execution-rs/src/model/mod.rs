@@ -10,6 +10,7 @@ use std::fmt::Formatter;
 use uuid::Uuid;
 
 pub mod balance;
+pub mod execution_event;
 pub mod order;
 pub mod order_event;
 pub mod trade;
@@ -37,6 +38,9 @@ pub enum AccountEventKind {
 
     // HTTP & WebSocket
     Balances(Vec<SymbolBalance>),
+    // TODO
+    // ExecutionError(ExecutionError),
+    // ConnectionStatus,
 }
 
 #[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash, Debug, Deserialize, Serialize)]

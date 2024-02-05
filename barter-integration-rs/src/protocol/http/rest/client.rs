@@ -5,6 +5,7 @@ use crate::{
 };
 use bytes::Bytes;
 use chrono::Utc;
+use std::fmt::Debug;
 use tokio::sync::mpsc;
 use tracing::warn;
 
@@ -14,12 +15,12 @@ use tracing::warn;
 /// signature [`Encoder`](super::super::private::encoder::Encoder), and
 /// [`HttpParser`](super::super::HttpParser).
 #[derive(Debug)]
-pub struct RestClient<'a, Strategy, Parser> {
+pub struct RestClient<Strategy, Parser> {
     /// HTTP [`reqwest::Client`] for executing signed [`reqwest::Request`]s.
     pub http_client: reqwest::Client,
 
     /// Base Url of the API being interacted with.
-    pub base_url: &'a str,
+    pub base_url: String,
 
     /// [`Metric`] transmitter for sending observed execution measurements to an external receiver.
     pub metric_tx: mpsc::UnboundedSender<Metric>,
@@ -38,7 +39,7 @@ pub struct RestClient<'a, Strategy, Parser> {
     pub parser: Parser,
 }
 
-impl<'a, Strategy, Parser> RestClient<'a, Strategy, Parser>
+impl<'a, Strategy, Parser> RestClient<Strategy, Parser>
 where
     Strategy: BuildStrategy,
     Parser: HttpParser,
@@ -46,34 +47,37 @@ where
     /// Execute the provided [`RestRequest`].
     pub async fn execute<Request>(
         &self,
-        request: Request,
+        request_input: Request,
     ) -> Result<Request::Response, Parser::OutputError>
     where
         Request: RestRequest,
+        <Request as RestRequest>::Response: Debug,
     {
         // Use provided Request to construct a signed reqwest::Request
-        let request = self.build(request)?;
+        let request = self.build(&request_input)?;
 
         // Measure request execution
-        let (status, payload) = self.measured_execution::<Request>(request).await?;
+        let (status, payload) = self
+            .measured_execution::<Request>(request, request_input)
+            .await?;
 
         // Attempt to parse API Success or Error response
         self.parser.parse::<Request::Response>(status, &payload)
     }
 
     /// Use the provided [`RestRequest`] to construct a signed Http [`reqwest::Request`].
-    pub fn build<Request>(&self, request: Request) -> Result<reqwest::Request, SocketError>
+    pub fn build<Request>(&self, request: &Request) -> Result<reqwest::Request, SocketError>
     where
         Request: RestRequest,
     {
         // Construct url
-        let url = self.base_url.to_string() + Request::path();
+        let url = self.base_url.to_string() + request.path();
 
         // Construct RequestBuilder with method & url
         let mut builder = self
             .http_client
-            .request(Request::method(), url)
-            .timeout(Request::timeout());
+            .request(request.method(), url)
+            .timeout(request.timeout());
 
         // Add optional query parameters
         if let Some(query_params) = request.query_params() {
@@ -96,6 +100,7 @@ where
     pub async fn measured_execution<Request>(
         &self,
         request: reqwest::Request,
+        request_input: Request, //  this is the original request constructed by client
     ) -> Result<(reqwest::StatusCode, Bytes), SocketError>
     where
         Request: RestRequest,
@@ -110,10 +115,10 @@ where
             name: "http_request_duration",
             time: Utc::now().timestamp_millis() as u64,
             tags: vec![
-                Request::metric_tag(),
-                Tag::new("http_method", Request::method().as_str()),
+                request_input.metric_tag(),
+                Tag::new("http_method", request_input.method().as_str()),
                 Tag::new("status_code", response.status().as_str()),
-                Tag::new("base_url", self.base_url),
+                Tag::new("base_url", self.base_url.as_str()),
             ],
             fields: vec![Field::new("duration", duration)],
         };
@@ -130,10 +135,10 @@ where
     }
 }
 
-impl<'a, Strategy, Parser> RestClient<'a, Strategy, Parser> {
+impl<Strategy, Parser> RestClient<Strategy, Parser> {
     /// Construct a new [`Self`] using the provided configuration.
     pub fn new(
-        base_url: &'a str,
+        base_url: String,
         metric_tx: mpsc::UnboundedSender<Metric>,
         strategy: Strategy,
         parser: Parser,

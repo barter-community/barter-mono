@@ -25,11 +25,19 @@ barter-macro = "0.1.1"
 tracing = "0.1.36"
 
 # Async
-tokio = { version = "1.20.1", features = ["full", "sync", "macros", "rt-multi-thread", "fs"] }
+tokio = { version = "1.20.1", features = [
+    "full",
+    "sync",
+    "macros",
+    "rt-multi-thread",
+    "fs",
+] }
 tokio-stream = { version = "0.1.9", features = ["sync"] }
 futures = "0.3.21"
 async-trait = "0.1.57"
-tokio-tungstenite = { version = "0.18.0", features = ["rustls-tls-webpki-roots"] }
+tokio-tungstenite = { version = "0.18.0", features = [
+    "rustls-tls-webpki-roots",
+] }
 
 
 # Protocol

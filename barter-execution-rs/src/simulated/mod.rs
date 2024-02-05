@@ -11,6 +11,9 @@ pub mod exchange;
 /// Barter [`SimulatedExchange`](exchange::SimulatedExchange).
 pub mod execution;
 
+/// utility functions for running sim exchange
+pub mod util;
+
 /// Events used to communicate with the Barter [`SimulatedExchange`](exchange::SimulatedExchange).
 ///
 /// Two main types of [`SimulatedEvent`]:

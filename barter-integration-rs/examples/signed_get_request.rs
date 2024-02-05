@@ -33,18 +33,21 @@ impl Signer for FtxSigner {
 
     fn config<'a, Request>(
         &'a self,
-        _: Request,
-        _: &RequestBuilder,
-    ) -> Result<Self::Config<'a>, SocketError>
+        request: &Request,
+        builder: RequestBuilder,
+    ) -> Result<(Self::Config<'a>, RequestBuilder), SocketError>
     where
         Request: RestRequest,
     {
-        Ok(FtxSignConfig {
-            api_key: self.api_key.as_str(),
-            time: Utc::now(),
-            method: Request::method(),
-            path: Request::path(),
-        })
+        Ok((
+            FtxSignConfig {
+                api_key: self.api_key.as_str(),
+                time: Utc::now(),
+                method: request.method(),
+                path: request.path(),
+            },
+            builder,
+        ))
     }
 
     fn bytes_to_sign<'a>(config: &Self::Config<'a>) -> Bytes {
@@ -74,7 +77,12 @@ impl HttpParser for FtxParser {
     type ApiError = serde_json::Value;
     type OutputError = ExecutionError;
 
-    fn parse_api_error(&self, status: StatusCode, api_error: Self::ApiError) -> Self::OutputError {
+    fn parse_api_error(
+        &self,
+        status: StatusCode,
+        api_error: Self::ApiError,
+        _parse_api_error: serde_json::Error,
+    ) -> Self::OutputError {
         // For simplicity, use serde_json::Value as Error and extract raw String for parsing
         let error = api_error.to_string();
 
@@ -97,34 +105,34 @@ enum ExecutionError {
     Socket(#[from] SocketError),
 }
 
-struct FetchBalancesRequest;
+#[derive(Debug)]
+pub struct FetchBalancesRequest;
 
 impl RestRequest for FetchBalancesRequest {
     type Response = FetchBalancesResponse; // Define Response type
-    type QueryParams = (); // FetchBalances does not require any QueryParams
     type Body = (); // FetchBalances does not require any Body
 
-    fn path() -> &'static str {
+    fn path(&self) -> &'static str {
         "/api/wallet/balances"
     }
 
-    fn method() -> reqwest::Method {
+    fn method(&self) -> reqwest::Method {
         reqwest::Method::GET
     }
 
-    fn metric_tag() -> Tag {
+    fn metric_tag(&self) -> Tag {
         Tag::new("method", "fetch_balances")
     }
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Debug)]
 #[allow(dead_code)]
-struct FetchBalancesResponse {
+pub struct FetchBalancesResponse {
     success: bool,
     result: Vec<FtxBalance>,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Debug)]
 #[allow(dead_code)]
 struct FtxBalance {
     #[serde(rename = "coin")]
@@ -152,7 +160,12 @@ async fn main() {
     );
 
     // Build RestClient with Ftx configuration
-    let rest_client = RestClient::new("https://ftx.com", http_metric_tx, request_signer, FtxParser);
+    let rest_client = RestClient::new(
+        "https://ftx.com".to_string(),
+        http_metric_tx,
+        request_signer,
+        FtxParser,
+    );
 
     // Fetch Result<FetchBalancesResponse, ExecutionError>
     let _response = rest_client.execute(FetchBalancesRequest).await;

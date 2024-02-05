@@ -1,3 +1,5 @@
+use std::fmt::Debug;
+
 use self::rest::RestRequest;
 use crate::error::SocketError;
 use reqwest::StatusCode;
@@ -31,7 +33,7 @@ pub trait BuildStrategy {
     /// `reqwest` headers.
     fn build<Request>(
         &self,
-        request: Request,
+        request: &Request,
         builder: reqwest::RequestBuilder,
     ) -> Result<reqwest::Request, SocketError>
     where
@@ -52,17 +54,19 @@ pub trait HttpParser {
         payload: &[u8],
     ) -> Result<Response, Self::OutputError>
     where
-        Response: DeserializeOwned,
+        Response: DeserializeOwned + Debug,
     {
         // Attempt to deserialise reqwest::Response bytes into Ok(Response)
         let parse_ok_error = match serde_json::from_slice::<Response>(payload) {
-            Ok(response) => return Ok(response),
+            Ok(response) => {
+                return Ok(response);
+            }
             Err(serde_error) => serde_error,
         };
 
         // Attempt to deserialise API Error if Ok(Response) deserialisation failed
         let parse_api_error_error = match serde_json::from_slice::<Self::ApiError>(payload) {
-            Ok(api_error) => return Err(self.parse_api_error(status, api_error)),
+            Ok(api_error) => return Err(self.parse_api_error(status, api_error, parse_ok_error)),
             Err(serde_error) => serde_error,
         };
 
@@ -83,5 +87,10 @@ pub trait HttpParser {
 
     /// If [`parse`](Self::parse) fails to deserialise the `Ok(Response)`, this function parses
     /// to parse the API [`Self::ApiError`] associated with the response.
-    fn parse_api_error(&self, status: StatusCode, error: Self::ApiError) -> Self::OutputError;
+    fn parse_api_error(
+        &self,
+        status: StatusCode,
+        error: Self::ApiError,
+        parse_error: serde_json::Error,
+    ) -> Self::OutputError;
 }

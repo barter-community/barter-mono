@@ -157,11 +157,11 @@
 //!     request_tx: mpsc::unbounded_channel().0,
 //! };
 //!
-//! let mut execution = SimulatedExecution::init(config, mpsc::unbounded_channel().0).await;
+//! let mut execution = SimulatedExecution::init(config).await;
 //!
 //! let order_event = test_util::order_event();
 //!
-//! let fill_event = execution.generate_fill(&order_event);
+//! // let fill_event = execution.generate_fill(&order_event);
 //! }
 //! ```
 //!
@@ -206,6 +206,8 @@
 )]
 #![allow(clippy::type_complexity)]
 #![allow(clippy::module_inception)]
+
+pub mod cerebrum;
 
 /// Defines a MarketEvent, and provides the Continuer and MarketGenerator traits for
 /// handling the generation of them. Contains implementations such as the (tick-by_tick)
@@ -322,6 +324,7 @@ pub mod test_util {
     /// Build an [`OrderEvent`] to buy 1.0 contract.
     pub fn order_event() -> OrderEvent {
         OrderEvent {
+            id: Default::default(),
             time: Utc::now(),
             exchange: Exchange::from("binance"),
             instrument: Instrument::from(("eth", "usdt", InstrumentKind::Spot)),

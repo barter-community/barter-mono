@@ -26,16 +26,14 @@ use crate::{
     model::{
         balance::SymbolBalance,
         order::{Cancelled, Open, Order, OrderId, RequestCancel, RequestOpen},
-        AccountEvent,
     },
 };
 use async_trait::async_trait;
 use barter_integration::model::Exchange;
-use fill::FillEvent;
-use model::order_event::OrderEvent;
+use execution::binance::{BinanceConfig, BinanceExecution};
 use serde::{Deserialize, Serialize};
+use simulated::execution::{SimulatedExecution, SimulationConfig};
 use std::fmt::{Display, Formatter};
-use tokio::sync::mpsc;
 
 // Fill event
 pub mod fill;
@@ -56,10 +54,13 @@ pub mod simulated;
 
 /// Defines the communication with the exchange. Each exchange integration requires it's own
 /// implementation.
+// Todo: implement fill event?
 #[async_trait]
 pub trait ExecutionClient {
-    const CLIENT: ExecutionId;
     type Config;
+
+    /// Return exchange [`Exchange`] identifier.
+    fn exchange(&self) -> Exchange;
 
     /// Initialise a new [`ExecutionClient`] with the provided [`Self::Config`] and
     /// [`AccountEvent`] transmitter.
@@ -67,10 +68,10 @@ pub trait ExecutionClient {
     /// **Note:**
     /// Usually entails spawning an asynchronous WebSocket event loop to consume [`AccountEvent`]s
     /// from the exchange, as well as returning the HTTP client `Self`.
-    async fn init(config: Self::Config, event_tx: mpsc::UnboundedSender<AccountEvent>) -> Self;
+    async fn init(config: Self::Config) -> Self;
 
     /// Return a [`FillEvent`] from executing the input [`OrderEvent`].
-    fn generate_fill(&self, order: &OrderEvent) -> Result<FillEvent, ExecutionError>;
+    // fn generate_fill(&self, order: &OrderEvent) -> Result<FillEvent, ExecutionError>;
 
     /// Fetch account [`Order<Open>`]s.
     async fn fetch_orders_open(&self) -> Result<Vec<Order<Open>>, ExecutionError>;
@@ -79,6 +80,8 @@ pub trait ExecutionClient {
     async fn fetch_balances(&self) -> Result<Vec<SymbolBalance>, ExecutionError>;
 
     /// Open orders.
+    /// This creates new orders (TODO: rename to new_orders / place_orders?)
+    /// NOTE: some orders like onchain-tx will take a long time to
     async fn open_orders(
         &self,
         open_requests: Vec<Order<RequestOpen>>,
@@ -94,12 +97,27 @@ pub trait ExecutionClient {
     async fn cancel_orders_all(&self) -> Result<Vec<Order<Cancelled>>, ExecutionError>;
 }
 
+// Todo:
+//   - Better name for this? This is the equivilant to ExchangeId...
+//    '--> renamed to ClientId for now to avoid confusion in development
+#[derive(Debug)]
+pub enum ClientId {
+    Simulated(SimulationConfig),
+    Binance(BinanceConfig),
+}
+
+#[derive(Debug)]
+pub enum ExchangeClient {
+    Simulated(SimulatedExecution),
+    Binance(BinanceExecution),
+}
+
 /// Unique identifier for an [`ExecutionClient`] implementation.
 #[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash, Debug, Deserialize, Serialize)]
 #[serde(rename = "execution", rename_all = "snake_case")]
 pub enum ExecutionId {
     Simulated,
-    Ftx,
+    Binance,
 }
 
 impl From<ExecutionId> for Exchange {
@@ -118,7 +136,7 @@ impl ExecutionId {
     pub fn as_str(&self) -> &'static str {
         match self {
             ExecutionId::Simulated => "simulated",
-            ExecutionId::Ftx => "ftx",
+            ExecutionId::Binance => "binance",
         }
     }
 }
