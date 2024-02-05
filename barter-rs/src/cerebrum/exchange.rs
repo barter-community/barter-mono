@@ -1,17 +1,15 @@
 use super::event::Event;
-use barter_execution::execution::binance::BinanceExecution;
-use barter_execution::model::execution_event::{ExchangeRequest, ExecutionRequest};
-use barter_execution::simulated::execution::SimulatedExecution;
+use super::exchange_client::{ClientId, ExchangeClient};
+use barter_execution::error::ExecutionError;
+use barter_execution::model::execution_event::ExecutionRequest;
+use barter_execution::model::{AccountEvent, AccountEventKind};
+use barter_execution::ExecutionClient;
 use barter_execution::ExecutionId;
-use barter_execution::{
-    execution::binance::BinanceConfig, simulated::execution::SimulationConfig, ExecutionClient,
-};
 use barter_integration::model::Exchange;
 use std::collections::HashMap;
-use std::time::Duration;
+use std::sync::Arc;
 use tokio::sync::mpsc;
-use tokio::time::sleep;
-use tracing::info;
+use tracing::{error, info};
 
 /// Responsibilities:
 /// - Determines best way to action an [`ExchangeRequest`] given the constraints of the exchange.
@@ -23,9 +21,7 @@ use tracing::info;
 
 #[derive(Debug)]
 pub struct ExchangePortal {
-    // TODO: do we need to store exchanges? For re-initialization?
-    exchanges: HashMap<ExecutionId, ClientId>,
-    clients: HashMap<Exchange, mpsc::UnboundedSender<ExchangeRequest>>,
+    clients: HashMap<Exchange, Arc<Box<ExchangeClient>>>,
     request_rx: mpsc::UnboundedReceiver<ExecutionRequest>,
     event_tx: mpsc::UnboundedSender<Event>,
 }
@@ -51,33 +47,31 @@ impl ExchangePortal {
 
         info!("initializing ExchangePortal {:?}", exchanges);
 
-        for (execution_id, client_id) in exchanges.iter() {
-            match client_id {
-                ClientId::Simulated(config) => {
-                    let (execution_tx, execution_rx) = mpsc::unbounded_channel();
-                    let client = SimulatedExecution::init(config.clone(), event_tx.clone()).await;
-                    clients.insert(Exchange::from(execution_id.clone()), execution_tx);
-                    tokio::task::spawn(async move {
-                        client.run(execution_rx).await;
-                    });
-                }
-                ClientId::Binance(config) => {
-                    let (execution_tx, execution_rx) = mpsc::unbounded_channel();
-                    let client = BinanceExecution::init(config.clone(), event_tx.clone()).await;
-                    clients.insert(Exchange::from(execution_id.clone()), execution_tx);
-                    tokio::spawn(async move {
-                        client.run(execution_rx).await;
-                    });
-                }
-            }
+        for (execution_id, client_id) in exchanges.into_iter() {
+            let client = ExchangeClient::init(client_id).await;
+            clients.insert(Exchange::from(execution_id), Arc::new(Box::new(client)));
         }
 
         Ok(Self {
-            exchanges,
             clients,
             request_rx,
             event_tx,
         })
+    }
+
+    fn send_account_tx(
+        event_tx: mpsc::UnboundedSender<Event>,
+        exchange: Exchange,
+        kind: AccountEventKind,
+    ) {
+        let account_event = AccountEvent {
+            exchange,
+            received_time: chrono::Utc::now(),
+            kind,
+        };
+        event_tx
+            .send(Event::Account(account_event))
+            .expect("Account engine is offline");
     }
 
     /// Todo:
@@ -85,58 +79,87 @@ impl ExchangePortal {
     ///  - This may live in Barter... ExchangeClient impls would live here. Order would be in Barter!
     ///  - Just use HTTP for trading for the time being...
     ///  - May need to run enum ExchangeEvent { request, ConnectionStatus } in order to re-spawn clients! -> state machine like Cerebrum!
-    pub fn run(mut self) {
-        loop {
-            // Receive next ExchangeRequest
-            let request = match self.request_rx.try_recv() {
-                Ok(request) => request,
-                Err(mpsc::error::TryRecvError::Empty) => continue,
-                Err(mpsc::error::TryRecvError::Disconnected) => panic!("todo"),
-            };
-            // while let Some(request) = self.request_rx.recv().await {
+    pub async fn run(mut self) {
+        while let Some(request) = self.request_rx.recv().await {
             // info!(payload = ?request, "received ExchangeRequest");
 
             // Action ExecutionRequest
             match request {
+                ExecutionRequest::OpenOrders(open_requests) => {
+                    open_requests.into_iter().for_each(|open_request| {
+                        let exchange = open_request.0;
+                        let orders = open_request.1;
+                        let client = self.client(&exchange);
+                        let tx = self.event_tx.clone();
+                        info!("sending OpenOrders ");
+                        tokio::spawn(async move {
+                            let open_orders = client.open_orders(orders).await;
+                            let open_orders = remove_error_responses(open_orders);
+                            let account_event = AccountEventKind::OrdersNew(open_orders);
+                            Self::send_account_tx(tx, exchange, account_event);
+                        });
+                    });
+                }
                 ExecutionRequest::FetchOrdersOpen(exchanges) => {
                     exchanges.into_iter().for_each(|exchange| {
                         let client = self.client(&exchange);
-                        (*client)
-                            .send(ExchangeRequest::FetchOrdersOpen)
-                            .expect("failed to send FetchOrdersOpen to ExchangeClient");
+                        let tx = self.event_tx.clone();
+                        tokio::spawn(async move {
+                            match client.fetch_orders_open().await {
+                                Ok(orders) => Self::send_account_tx(
+                                    tx,
+                                    exchange.clone(),
+                                    AccountEventKind::OrdersOpen(orders),
+                                ),
+                                Err(e) => error!(error = ?e, "failed to fetch open orders"),
+                            };
+                        });
                     });
                 }
                 ExecutionRequest::FetchBalances(exchanges) => {
                     exchanges.into_iter().for_each(|exchange| {
                         let client = self.client(&exchange);
-                        (*client)
-                            .send(ExchangeRequest::FetchBalances)
-                            .expect("failed to send FetchBalances to ExchangeClient");
-                    });
-                }
-                ExecutionRequest::OpenOrders(open_requests) => {
-                    open_requests.into_iter().for_each(|open_request| {
-                        let client = self.client(&open_request.0);
-                        info!("sending OpenOrders ");
-                        (*client)
-                            .send(ExchangeRequest::OpenOrders(open_request.1))
-                            .expect("failed to send OpenOrders to ExchangeClient");
+                        let tx = self.event_tx.clone();
+                        tokio::spawn(async move {
+                            match client.fetch_balances().await {
+                                Ok(balances) => Self::send_account_tx(
+                                    tx,
+                                    exchange,
+                                    AccountEventKind::Balances(balances),
+                                ),
+                                Err(e) => error!(error = ?e, "failed to fetch balances"),
+                            };
+                        });
                     });
                 }
                 ExecutionRequest::CancelOrders(cancel_requests) => {
                     cancel_requests.into_iter().for_each(|cancel_request| {
-                        let client = self.client(&cancel_request.0);
-                        (*client)
-                            .send(ExchangeRequest::CancelOrders(cancel_request.1))
-                            .expect("failed to send CancelOrders to ExchangeClient");
+                        let exchange = cancel_request.0;
+                        let orders = cancel_request.1;
+                        let client = self.client(&exchange);
+                        let tx = self.event_tx.clone();
+                        tokio::spawn(async move {
+                            let cancelled_orders = client.cancel_orders(orders).await;
+                            let cancelled_orders = remove_error_responses(cancelled_orders);
+                            let account_event = AccountEventKind::OrdersCancelled(cancelled_orders);
+                            Self::send_account_tx(tx, exchange, account_event);
+                        });
                     });
                 }
                 ExecutionRequest::CancelOrdersAll(exchanges) => {
                     exchanges.into_iter().for_each(|exchange| {
                         let client = self.client(&exchange);
-                        (*client)
-                            .send(ExchangeRequest::CancelOrdersAll)
-                            .expect("failed to send CancelOrdersAll to ExchangeClient");
+                        let tx = self.event_tx.clone();
+                        tokio::spawn(async move {
+                            match client.cancel_orders_all().await {
+                                Ok(cancelled_orders) => Self::send_account_tx(
+                                    tx,
+                                    exchange,
+                                    AccountEventKind::OrdersCancelled(cancelled_orders),
+                                ),
+                                Err(e) => error!(error = ?e, "failed to cancel all orders"),
+                            };
+                        });
                     });
                 }
             }
@@ -144,31 +167,38 @@ impl ExchangePortal {
     }
 
     /// Retrieve the [`ExchangeClient`] associated with the [`Exchange`].
-    pub fn client(&mut self, exchange: &Exchange) -> &mpsc::UnboundedSender<ExchangeRequest> {
+    pub fn client(&self, exchange: &Exchange) -> Arc<Box<ExchangeClient>> {
         self.clients
             .get(exchange)
+            .cloned()
             .expect("cannot retrieve ExchangeClient for unexpected Exchange")
     }
 }
 
-#[derive(Debug, Clone, Copy)]
-pub struct ClientHealth {
-    status: ClientStatus,
-    latency_avg: (),
+// UTILS
+pub fn remove_error_responses<T>(responses: Vec<Result<T, ExecutionError>>) -> Vec<T> {
+    responses
+        .into_iter()
+        .filter_map(|response| match response {
+            Ok(response) => Some(response),
+            Err(e) => {
+                error!(error = ?e, "failed to submit an order");
+                None
+            }
+        })
+        .collect::<Vec<T>>()
 }
+
+// Todo: client health
+// #[derive(Debug, Clone, Copy)]
+// pub struct ClientHealth {
+//     status: ClientStatus,
+//     latency_avg: (),
+// }
 
 #[derive(Clone, Copy, Debug)]
 pub enum ClientStatus {
     Connected,
     CancelOnly,
     Disconnected,
-}
-
-// Todo:
-//   - Better name for this? This is the equivilant to ExchangeId...
-//    '--> renamed to ClientId for now to avoid confusion in development
-#[derive(Debug)]
-pub enum ClientId {
-    Simulated(SimulationConfig),
-    Binance(BinanceConfig),
 }

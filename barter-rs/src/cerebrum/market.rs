@@ -12,7 +12,7 @@ where
     Strategy: IndicatorUpdater,
 {
     pub fn update(mut self, market: MarketEvent<DataKind>) -> Engine<Strategy> {
-        // info!(kind = "Market", exchange = ?market.exchange, instrument = %market.instrument, payload = ?market, "received Event");
+        info!(kind = "Market", exchange = ?market.exchange, instrument = %market.instrument, payload = ?market, "received Event");
 
         // Update Positions
         self.accounts.update_positions(&market);

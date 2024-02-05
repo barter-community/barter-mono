@@ -211,7 +211,7 @@ where
                         }
                     }
 
-                    Event::OrderNew(order) => {
+                    Event::OrderNew(_order) => {
                         // let fill = self
                         //     .execution
                         //     .generate_fill(&order)

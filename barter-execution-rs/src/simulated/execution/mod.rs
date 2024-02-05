@@ -1,31 +1,23 @@
-use std::sync::Arc;
-
 use crate::{
-    fill::{Fees, FillEvent},
+    fill::Fees,
     model::{
-        execution_event::ExchangeRequest,
         order::{Cancelled, Open, Order},
         order_event::OrderEvent,
     },
     simulated::SimulatedEvent,
-    AccountEvent, ExecutionClient, ExecutionError, ExecutionId, RequestCancel, RequestOpen,
-    SymbolBalance,
+    ExecutionClient, ExecutionError, ExecutionId, RequestCancel, RequestOpen, SymbolBalance,
 };
 use async_trait::async_trait;
 use barter_integration::model::Exchange;
-use chrono::Utc;
-use futures::channel::mpsc::UnboundedReceiver;
 use tokio::sync::{mpsc, oneshot};
 
 /// Simulated [`ExecutionClient`] implementation that integrates with the Barter
 /// [`SimulatedExchange`](super::exchange::SimulatedExchange).
 #[derive(Debug)]
-pub struct SimulatedExecution<Event> {
+pub struct SimulatedExecution {
     /// Simulated fee percentage to be used for each [`Fees`] field in decimal form (eg/ 0.01 for 1%)
     pub fees_pct: Fees,
     pub request_tx: mpsc::UnboundedSender<SimulatedEvent>,
-
-    pub event_tx: mpsc::UnboundedSender<Event>,
 }
 
 /// Config for initializing a [`SimulatedExecution`] instance.
@@ -37,24 +29,18 @@ pub struct SimulationConfig {
 }
 
 #[async_trait]
-impl<Event> ExecutionClient for SimulatedExecution<Event>
-where
-    Event: Send + From<AccountEvent>,
-{
-    const CLIENT: ExecutionId = ExecutionId::Simulated;
+impl ExecutionClient for SimulatedExecution {
     type Config = SimulationConfig;
-    type Event = Event;
 
-    async fn init(config: Self::Config, event_tx: mpsc::UnboundedSender<Event>) -> Self {
+    async fn init(config: Self::Config) -> Self {
         Self {
             request_tx: config.request_tx,
             fees_pct: config.simulated_fees_pct,
-            event_tx,
         }
     }
 
-    fn event_tx(&self) -> &mpsc::UnboundedSender<Event> {
-        &self.event_tx
+    fn exchange(&self) -> Exchange {
+        Exchange::from(ExecutionId::Simulated)
     }
 
     // async fn generate_fill(&self, order: &OrderEvent) -> Result<FillEvent, ExecutionError> {
@@ -155,14 +141,14 @@ where
     }
 }
 
-impl<Event> SimulatedExecution<Event> {
+impl SimulatedExecution {
     /// Calculates the simulated gross fill value (excluding TotalFees) based on the input [`OrderEvent`].
-    fn calculate_fill_value_gross(order: &OrderEvent) -> f64 {
+    pub fn calculate_fill_value_gross(order: &OrderEvent) -> f64 {
         order.quantity.abs() * order.market_meta.close
     }
 
     /// Calculates the simulated [`Fees`] a [`FillEvent`] will incur, based on the input [`OrderEvent`].
-    fn calculate_fees(&self, fill_value_gross: &f64) -> Fees {
+    pub fn calculate_fees(&self, fill_value_gross: &f64) -> Fees {
         Fees {
             exchange: self.fees_pct.exchange * fill_value_gross,
             slippage: self.fees_pct.slippage * fill_value_gross,
@@ -177,6 +163,7 @@ mod tests {
         instrument::{kind::InstrumentKind, Instrument},
         Exchange,
     };
+    use chrono::Utc;
     use uuid::Uuid;
 
     use crate::{
@@ -240,7 +227,7 @@ mod tests {
         input_order.quantity = 100.0;
         input_order.market_meta.close = 10.0;
 
-        let actual = SimulatedExecution::<AccountEvent>::calculate_fill_value_gross(&input_order);
+        let actual = SimulatedExecution::calculate_fill_value_gross(&input_order);
 
         let expected = 100.0 * 10.0;
 
@@ -253,7 +240,7 @@ mod tests {
         input_order.quantity = -(100.0);
         input_order.market_meta.close = 10.0;
 
-        let actual = SimulatedExecution::<AccountEvent>::calculate_fill_value_gross(&input_order);
+        let actual = SimulatedExecution::calculate_fill_value_gross(&input_order);
 
         let expected = (100.0 * 10.0) as f64;
 
@@ -262,17 +249,14 @@ mod tests {
 
     #[tokio::test]
     async fn should_calculate_simulated_fees_correctly() {
-        let simulated_execution = SimulatedExecution::<AccountEvent>::init(
-            SimulationConfig {
-                simulated_fees_pct: Fees {
-                    exchange: 0.5,
-                    slippage: 0.1,
-                    network: 0.001,
-                },
-                request_tx: mpsc::unbounded_channel().0,
+        let simulated_execution = SimulatedExecution::init(SimulationConfig {
+            simulated_fees_pct: Fees {
+                exchange: 0.5,
+                slippage: 0.1,
+                network: 0.001,
             },
-            mpsc::unbounded_channel().0,
-        )
+            request_tx: mpsc::unbounded_channel().0,
+        })
         .await;
 
         let input_fill_value_gross = 100.0;
