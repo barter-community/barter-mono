@@ -56,14 +56,27 @@ impl IndicatorUpdater for StrategyExample {
 }
 
 impl strategy::OrderGenerator for StrategyExample {
-    fn generate_cancels(&mut self) -> Option<Vec<(Exchange, Vec<Order<RequestCancel>>)>> {
+    fn generate_cancels(
+        &mut self,
+        _accounts: &Accounts,
+    ) -> Option<Vec<(Exchange, Vec<Order<RequestCancel>>)>> {
         None
     }
 
-    fn generate_orders(&mut self) -> Option<Vec<(Exchange, Vec<Order<RequestOpen>>)>> {
+    fn generate_orders(
+        &mut self,
+        accounts: &Accounts,
+    ) -> Option<Vec<(Exchange, Vec<Order<RequestOpen>>)>> {
         if self.counter > 10 {
             return None;
         }
+        let sim_acc = accounts.get(&Exchange::from(ExecutionId::Simulated));
+        let num_open_orders = sim_acc.orders_open.len();
+        if self.counter > num_open_orders {
+            return None;
+        }
+        println!("accounts {:#?}", sim_acc.orders_open.len());
+
         let order = order_request_limit(
             Instrument::new("btc", "usdt", InstrumentKind::Perpetual),
             ClientOrderId(uuid::Uuid::new_v4()),
@@ -71,6 +84,7 @@ impl strategy::OrderGenerator for StrategyExample {
             10000.0,
             0.001,
         );
+
         self.counter += 1;
         Some(vec![(Exchange::from(ExecutionId::Simulated), vec![order])])
     }
