@@ -21,7 +21,7 @@ fn convert_bigint_string_to_float(
     bigint_str: &str,
     decimals: i32,
     radix: u32,
-) -> Result<(f64), DexError> {
+) -> Result<f64, DexError> {
     let result = BigInt::parse_bytes(bigint_str.as_bytes(), radix);
     match result {
         Some(bigint) => {
@@ -47,7 +47,7 @@ async fn map_uni_orders_to_intent_orders(
         let token_out = tokens.get_token(&1, &uni_order.outputs[0].token).await?;
 
         let market = Market::new(&token_in, &token_out);
-        let (quote, base, buy) =
+        let (quote, base, _buy) =
             market::Market::get_quote_and_base(&market.quotes, &token_in.symbol, &token_out.symbol);
         let instrument: Instrument =
             Instrument::new(quote.clone(), base.clone(), InstrumentKind::IntentOrder);
@@ -107,8 +107,8 @@ async fn map_uni_orders_to_intent_orders(
     Ok(intent_orders)
 }
 
-pub async fn get_open_orders(chainId: u8) -> Result<Vec<UniOrder>, DexError> {
-    let url = format!("{}?chainId={}&orderStatus=open", UNISWAPX_API, chainId);
+pub async fn get_open_orders(chain_id: u8) -> Result<Vec<UniOrder>, DexError> {
+    let url = format!("{}?chainId={}&orderStatus=open", UNISWAPX_API, chain_id);
     let response = reqwest::get(&url).await?;
 
     if response.status().is_success() {
@@ -197,7 +197,7 @@ pub fn init() -> UnboundedReceiver<MarketEvent<DataKind>> {
     tokio::spawn(async move {
         let mut open_orders = Vec::<UniOrder>::new();
         loop {
-            let mut result = get_open_orders(1).await;
+            let result = get_open_orders(1).await;
             match result {
                 Ok(orders) => {
                     let mut new_orders = filter_open_orders(&mut open_orders, &orders);

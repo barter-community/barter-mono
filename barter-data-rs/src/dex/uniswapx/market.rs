@@ -1,5 +1,6 @@
 use crate::dex::tokens::Token;
 
+#[derive(Debug, Clone)]
 pub struct Market {
     pub quotes: Vec<String>,
     pub quote: String,

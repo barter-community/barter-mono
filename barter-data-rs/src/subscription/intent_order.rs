@@ -1,6 +1,5 @@
 use super::SubKind;
 use barter_integration::model::instrument::Instrument;
-use num_bigint::BigInt;
 use serde::{Deserialize, Serialize};
 
 /// Barter [`Subscription`](super::Subscription) [`SubKind`] that yields [`IntentOrder`]

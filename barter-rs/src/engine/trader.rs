@@ -82,7 +82,7 @@ where
     /// Strategy that implements [`SignalGenerator`].
     strategy: Strategy,
     /// Execution handler that implements [`ExecutionClient`].
-    execution: Execution,
+    _execution: Execution,
     _statistic_marker: PhantomData<Statistic>,
 }
 
@@ -113,7 +113,7 @@ where
             portfolio: lego.portfolio,
             data: lego.data,
             strategy: lego.strategy,
-            execution: lego.execution,
+            _execution: lego.execution,
             _statistic_marker: PhantomData::default(),
         }
     }
@@ -396,7 +396,7 @@ where
             strategy: self
                 .strategy
                 .ok_or(EngineError::BuilderIncomplete("strategy"))?,
-            execution: self
+            _execution: self
                 .execution
                 .ok_or(EngineError::BuilderIncomplete("execution"))?,
             _statistic_marker: PhantomData::default(),

@@ -23,7 +23,7 @@ impl SignalGenerator for RSIStrategy {
         // Check if it's a MarketEvent with a candle
         let candle_close = match &market.kind {
             DataKind::Candle(candle) => candle.close,
-            DataKind::IntentOrder(order) => return None,
+            DataKind::IntentOrder(_order) => return None,
             _ => return None,
         };
 

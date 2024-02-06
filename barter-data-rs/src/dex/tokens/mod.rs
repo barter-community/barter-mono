@@ -10,6 +10,7 @@ use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
+#[derive(Debug)]
 pub struct TokenCache {
     client: Client,
 }
@@ -49,7 +50,7 @@ impl TokenCache {
                 let token: Token = serde_json::from_str(&value)?;
                 return Ok(token);
             }
-            Err(e) => {
+            Err(_e) => {
                 // the token doesn't exist yet
                 let token = self.get_token_from_chain(chain_id, address).await?;
                 con.set(&key, serde_json::to_string(&token)?)?;
@@ -60,7 +61,7 @@ impl TokenCache {
 
     pub async fn get_token_from_chain(
         &self,
-        chain_id: &u64,
+        _chain_id: &u64,
         address: &String,
     ) -> Result<Token, DexError> {
         // Special Cases
