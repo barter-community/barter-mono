@@ -2,6 +2,8 @@ use barter_data::event::{DataKind, MarketEvent};
 use barter_execution::model::order::{Order, RequestCancel, RequestOpen};
 use barter_integration::model::Exchange;
 
+use super::account::Accounts;
+
 pub trait IndicatorUpdater {
     fn update_indicators(&mut self, market: &MarketEvent<DataKind>);
 }
@@ -11,8 +13,14 @@ pub trait IndicatorUpdater {
 //  - Do I want two seperate states, one for generate_cancel(), one for generate_orders()?
 
 pub trait OrderGenerator {
-    fn generate_cancels(&mut self) -> Option<Vec<(Exchange, Vec<Order<RequestCancel>>)>>;
-    fn generate_orders(&mut self) -> Option<Vec<(Exchange, Vec<Order<RequestOpen>>)>>;
+    fn generate_cancels(
+        &mut self,
+        accounts: &Accounts,
+    ) -> Option<Vec<(Exchange, Vec<Order<RequestCancel>>)>>;
+    fn generate_orders(
+        &mut self,
+        accounts: &Accounts,
+    ) -> Option<Vec<(Exchange, Vec<Order<RequestOpen>>)>>;
 }
 
 // Todo: What does the Strategy do?

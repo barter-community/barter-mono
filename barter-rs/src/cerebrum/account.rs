@@ -96,6 +96,12 @@ pub struct Account {
 }
 
 impl Accounts {
+    pub fn get(&self, exchange: &Exchange) -> &Account {
+        self.0
+            .get(exchange)
+            .expect("cannot retrieve Account for unexpected Exchange")
+    }
+
     pub fn account(&mut self, exchange: &Exchange) -> &mut Account {
         self.0
             .get_mut(exchange)

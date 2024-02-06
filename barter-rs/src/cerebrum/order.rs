@@ -21,14 +21,14 @@ where
 {
     pub fn generate_order_requests(mut self) -> Engine<Strategy> {
         // Send CancelOrders Command to ExchangeClient
-        if let Some(cancel_requests) = self.strategy.generate_cancels() {
+        if let Some(cancel_requests) = self.strategy.generate_cancels(&self.accounts) {
             self.request_tx
                 .send(ExecutionRequest::CancelOrders(cancel_requests))
                 .unwrap()
         }
 
         // Send OpenOrders Command to ExchangeClient
-        if let Some(open_requests) = self.strategy.generate_orders() {
+        if let Some(open_requests) = self.strategy.generate_orders(&self.accounts) {
             self.request_tx
                 .send(ExecutionRequest::OpenOrders(open_requests))
                 .unwrap();
